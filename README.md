@@ -4,7 +4,7 @@
 
 ## What this repo contains
 
-- **demo-script.md** — talk script and flow (~40-45 min)
+- **demo-script.md** — talk script, flow (~40-45 min), and personal theory notes at the bottom
 - **prompts.md** — copy-paste-ready prompts for each demo step
 - **preflight-checklist.md** — full machine setup: Claude Code (VSCode + CLI), Terraform MCP server (npx or Docker), skills installation, dry-run steps
 
