@@ -27,8 +27,7 @@ After install:
 ```bash
 # If you prefer the terminal version:
 npm install -g @anthropic-ai/claude-code
-# Or:
-brew install claude-code
+# Note: brew install claude-code does NOT exist — use npm above
 
 # Verify:
 claude --version
@@ -43,10 +42,27 @@ Pick one and stick with it. Don't switch mid-demo.
 
 ---
 
-## 2. Software Versions
+## 2. Verify Anthropic API Key
+
+Claude Code requires an API key to run.
 
 ```bash
-terraform version        # Need >= 1.6 (ideally 1.9+) for terraform test
+# Check it's set:
+echo $ANTHROPIC_API_KEY
+
+# If empty, set it:
+export ANTHROPIC_API_KEY="your-key-here"
+# Get from: https://console.anthropic.com/settings/keys
+```
+
+> ⚠️ Make sure your account has credits — a zero-balance account will fail mid-demo.
+
+---
+
+## 3. Software Versions
+
+```bash
+terraform version        # Need >= 1.7 (mock_provider requires 1.7+, ideally 1.9+) for terraform test
 node --version           # Need v18+ for npx
 git --version            # Need for cloning Anton's skill
 docker --version         # Need if using Docker-based MCP server
@@ -188,7 +204,7 @@ Skills are installed LIVE to show incremental improvement:
 | Act   | Skills state                    | How                                     |
 |-------|---------------------------------|-----------------------------------------|
 | Act 1 | NO skills, NO MCP              | `~/demo-terraform-naive/`, no config    |
-| Act 2 | Install Anton's + HashiCorp    | `git clone` + `/plugin marketplace add` |
+| Act 2 | Install Anton's + HashiCorp    | `git clone` + `/plugin marketplace add` (verify command works in your Claude Code version first) |
 | Act 3 | Both skills + MCP active       | Same dir, everything loaded             |
 | Act 4 | Same — now add tests           | `terraform test` on generated code      |
 
