@@ -6,6 +6,296 @@ own words during the demo.
 
 ---
 
+## Architecture Diagrams
+
+### The Big Picture — How Everything Connects
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           YOU (the engineer)                            │
+│                                                                         │
+│   "Create a production-ready EC2 with encrypted volume and HTTPS SG"   │
+└──────────────────────────────────┬──────────────────────────────────────┘
+                                   │ your prompt
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         CLAUDE CODE (AI Agent)                          │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                     CONTEXT WINDOW                               │   │
+│  │                                                                   │   │
+│  │  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────┐   │   │
+│  │  │  Anton's Skill   │  │ HashiCorp Skills  │  │  Your Prompt  │   │   │
+│  │  │                  │  │                   │  │               │   │   │
+│  │  │ • Module layout  │  │ • Style guide     │  │ • EC2 instance│   │   │
+│  │  │ • Testing        │  │ • Stacks patterns │  │ • HTTPS only  │   │   │
+│  │  │ • CI/CD          │  │ • Provider dev    │  │ • Encrypted   │   │   │
+│  │  │ • Security       │  │ • Refactoring     │  │ • Tagged      │   │   │
+│  │  │ • tflint/tfsec   │  │ • Packer          │  │               │   │
+│  │  └─────────────────┘  └──────────────────┘  └───────────────┘   │   │
+│  │              ▲                    ▲                                │   │
+│  │              │                    │                                │   │
+│  │      loaded at startup     loaded at startup                      │   │
+│  │    (git clone → skills/)   (/plugin install)                      │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  During code generation, Claude calls MCP tools:                        │
+│  "I need to look up aws_instance docs before writing..."                │
+│                                   │                                     │
+└───────────────────────────────────┼─────────────────────────────────────┘
+                                    │ MCP tool call (JSON-RPC over stdio)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      TERRAFORM MCP SERVER                               │
+│                      (runs as child process)                            │
+│                                                                         │
+│  Exposed tools:                                                         │
+│  ┌──────────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
+│  │ readTerraformRegistry│  │ resolveModule     │  │ getProviderDocs  │  │
+│  │                      │  │ ToProvider        │  │                  │  │
+│  │ Reads resource docs  │  │ Maps module →     │  │ Provider schema, │  │
+│  │ for aws_instance,    │  │ required provider │  │ argument names,  │  │
+│  │ aws_vpc, aws_sg etc  │  │ and version       │  │ types, defaults  │  │
+│  └──────────┬───────────┘  └────────┬─────────┘  └────────┬─────────┘  │
+│             │                       │                      │            │
+└─────────────┼───────────────────────┼──────────────────────┼────────────┘
+              │                       │                      │
+              └───────────┬───────────┘──────────────────────┘
+                          │ HTTPS API calls
+                          ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    TERRAFORM REGISTRY                                    │
+│                  registry.terraform.io                                   │
+│                                                                         │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────────┐  │
+│  │    Providers     │  │     Modules      │  │    Documentation      │  │
+│  │                  │  │                  │  │                       │  │
+│  │ aws v5.82.0     │  │ vpc v5.16.0      │  │ aws_instance args:    │  │
+│  │ azurerm v4.x    │  │ eks v20.31.0     │  │  • ami                │  │
+│  │ google v6.x     │  │ s3-bucket v4.x   │  │  • instance_type      │  │
+│  │ 4000+ more...   │  │ 15000+ more...   │  │  • root_block_device  │  │
+│  └─────────────────┘  └──────────────────┘  │    └─ encrypted       │  │
+│                                              │    └─ volume_size     │  │
+│                                              └───────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### MCP Protocol — How the Pipe Works
+
+```
+┌──────────────┐          stdio (stdin/stdout)         ┌──────────────────┐
+│              │  ──────── JSON-RPC messages ────────▶  │                  │
+│  Claude Code │                                        │  MCP Server      │
+│  (MCP Client)│  ◀──────── tool results ────────────  │  (terraform-mcp) │
+│              │                                        │                  │
+└──────────────┘                                        └──────────────────┘
+
+Step-by-step during generation:
+
+1. Claude reads your prompt
+   "...read AWS provider docs from the Terraform Registry..."
+
+2. Claude decides to call an MCP tool
+   → { "method": "readTerraformRegistry",
+       "params": { "resource": "aws_instance" } }
+
+3. MCP server receives the call
+   → Hits registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance
+
+4. MCP server returns real docs
+   ← { "result": {
+         "arguments": [
+           { "name": "ami", "type": "string", "required": true },
+           { "name": "instance_type", "type": "string", "required": true },
+           { "name": "root_block_device", "type": "block", "attributes": [
+               { "name": "encrypted", "type": "bool", "default": false },
+               { "name": "volume_size", "type": "number" }
+           ]}
+         ]
+       }}
+
+5. Claude uses REAL argument names to generate Terraform
+   → No hallucination. No guessing. Real data.
+```
+
+### Agent Skills Architecture — How Skills Load
+
+```
+~/.claude/skills/                        Claude Code context window
+├── terraform/        ──── loaded ────▶  ┌─────────────────────────┐
+│   ├── skill.md               at        │                         │
+│   ├── instructions/          startup   │  System prompt          │
+│   │   ├── modules.md                   │  + Anton's skill rules  │
+│   │   ├── testing.md                   │  + HashiCorp skill rules│
+│   │   └── security.md                  │  + Your prompt          │
+│   └── references/                      │                         │
+│       ├── do.md                        │  "When writing TF:      │
+│       └── dont.md                      │   - always use modules  │
+│                                        │   - encrypt by default  │
+├── hashicorp/        ──── loaded ────▶  │   - write tests         │
+│   ├── terraform-style-guide/  at       │   - follow HC style     │
+│   │   └── skill.md           startup   │   - use default_tags    │
+│   ├── terraform-tests/                 │   - run tflint/tfsec"   │
+│   │   └── skill.md                     │                         │
+│   ├── terraform-stacks/                └─────────────────────────┘
+│   │   └── skill.md                               │
+│   ├── provider-dev/                              │
+│   │   └── skill.md                     Claude uses these rules
+│   ├── module-refactor/                 while generating code
+│   │   └── skill.md                               │
+│   └── packer/                                    ▼
+│       └── skill.md                     ┌─────────────────────┐
+│                                        │  Generated Terraform │
+└── (any-other-skill/)                   │  that follows ALL    │
+                                         │  loaded skill rules  │
+                                         └─────────────────────┘
+
+Key insight:
+  Skills are NOT code. Skills are INSTRUCTIONS.
+  They don't execute. They guide.
+  Like a style guide pinned above your desk — you read it, then write code.
+```
+
+### The Complete Workflow — End to End
+
+```
+    ┌──────────┐
+    │ ENGINEER │
+    └────┬─────┘
+         │
+         │ writes prompt + test policy
+         ▼
+    ┌──────────────────────────────────────────────┐
+    │              CLAUDE CODE                      │
+    │                                               │
+    │  1. Reads prompt                              │
+    │  2. Skills shape HOW it will write            │
+    │  3. Calls MCP for WHAT args to use            │
+    │  4. Generates .tf files + .tftest.hcl         │
+    └──────────────────┬───────────────────────────┘
+                       │
+                       ▼
+    ┌──────────────────────────────────────────────┐
+    │           GENERATED FILES                     │
+    │                                               │
+    │  main.tf          ← infrastructure code       │
+    │  variables.tf     ← parameterized inputs      │
+    │  outputs.tf       ← downstream consumers      │
+    │  tests/ec2.tftest.hcl  ← security contract    │
+    └──────────────────┬───────────────────────────┘
+                       │
+                       ▼
+    ┌──────────────────────────────────────────────┐
+    │           terraform test                      │
+    │                                               │
+    │  ✓ instance_type == "t3.micro"               │
+    │  ✓ root_block_device.encrypted == true       │
+    │  ✓ only 443 from 0.0.0.0/0                  │
+    │  ✓ tags: ManagedBy, Environment, Team        │
+    └──────────────────┬───────────────────────────┘
+                       │
+              ┌────────┴────────┐
+              │                 │
+         PASS ▼            FAIL ▼
+    ┌──────────────┐   ┌──────────────────────────┐
+    │  Ship it     │   │  Back to Claude:          │
+    │  (tf apply)  │   │  "Test failed. Fix the    │
+    │              │   │   TF, not the test."       │
+    └──────────────┘   └────────────┬──────────────┘
+                                    │
+                                    ▼
+                            ┌──────────────┐
+                            │ Claude fixes  │
+                            │ → rerun test  │
+                            │ → loop until  │
+                            │   green       │
+                            └──────────────┘
+```
+
+### MCP vs Skills vs Tests — Side by Side
+
+```
+┌────────────────────┬──────────────────────┬──────────────────────┐
+│    MCP SERVER      │    AGENT SKILLS      │   TERRAFORM TEST     │
+│    (the pipe)      │    (the textbook)    │   (the contract)     │
+├────────────────────┼──────────────────────┼──────────────────────┤
+│                    │                      │                      │
+│ WHAT it gives:     │ WHAT it gives:       │ WHAT it gives:       │
+│ Real-time data     │ Expert knowledge     │ Pass/fail verdict    │
+│                    │                      │                      │
+│ WHEN it acts:      │ WHEN it acts:        │ WHEN it acts:        │
+│ During generation  │ Before generation    │ After generation     │
+│ (on-demand calls)  │ (loaded at startup)  │ (explicit run)       │
+│                    │                      │                      │
+│ WITHOUT it:        │ WITHOUT it:          │ WITHOUT it:          │
+│ AI guesses args    │ AI writes messy code │ You review 500 lines │
+│ from training data │ that "works" but     │ of HCL manually and  │
+│ → hallucination    │ isn't production     │ pray you catch the   │
+│   risk             │ grade                │ security bug         │
+│                    │                      │                      │
+│ WITH it:           │ WITH it:             │ WITH it:             │
+│ AI reads LIVE docs │ AI follows expert    │ 5 assertions catch   │
+│ → correct args     │ patterns → clean,    │ what humans miss     │
+│ → correct versions │ modular, secure code │ → automated safety   │
+│                    │                      │                      │
+│ ANALOGY:           │ ANALOGY:             │ ANALOGY:             │
+│ Open-book exam     │ Culinary school      │ Health inspection    │
+│ (look up answers)  │ (learn to cook)      │ (pass or no permit)  │
+│                    │                      │                      │
+│ CHANGES:           │ CHANGES:             │ CHANGES:             │
+│ Every time a       │ Slowly — practices   │ When YOUR policy     │
+│ provider updates   │ evolve over months   │ changes              │
+│                    │                      │                      │
+└────────────────────┴──────────────────────┴──────────────────────┘
+```
+
+### Where Each Piece Lives on Your Machine
+
+```
+Your machine
+│
+├── ~/demo-terraform-full/              ← project directory
+│   ├── .claude/
+│   │   └── settings.json              ← MCP server config lives HERE
+│   │       {
+│   │         "mcpServers": {
+│   │           "terraform": {
+│   │             "command": "npx",
+│   │             "args": ["-y", "terraform-mcp-server"]
+│   │           }
+│   │         }
+│   │       }
+│   │
+│   ├── main.tf                         ← generated by Claude
+│   ├── variables.tf                    ← generated by Claude
+│   ├── outputs.tf                      ← generated by Claude
+│   └── tests/
+│       └── ec2.tftest.hcl             ← generated by Claude
+│
+├── ~/.claude/
+│   └── skills/                         ← ALL skills live HERE
+│       ├── terraform/                  ← Anton Babenko's skill
+│       │   ├── skill.md                  (git clone)
+│       │   ├── instructions/
+│       │   └── references/
+│       │
+│       └── hashicorp/                  ← HashiCorp Agent Skills
+│           ├── terraform-style-guide/    (/plugin install)
+│           ├── terraform-tests/
+│           ├── terraform-stacks/
+│           ├── provider-dev/
+│           ├── module-refactor/
+│           └── packer/
+│
+└── (npx cache or Docker)
+    └── terraform-mcp-server            ← MCP server binary
+        Starts as child process when Claude Code launches
+        Connects via stdio (stdin/stdout)
+        Dies when Claude Code exits
+```
+
+---
+
 ## What is MCP? (Model Context Protocol)
 
 **The one-liner:** MCP is a USB port for AI — plug in any data source and the
