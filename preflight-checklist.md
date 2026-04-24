@@ -25,14 +25,15 @@ After install:
 ### Option B: CLI (for terminal-based demo)
 
 ```bash
-# If you prefer the terminal version:
+# Install via npm:
 npm install -g @anthropic-ai/claude-code
-# Or:
-brew install claude-code
 
 # Verify:
 claude --version
 ```
+
+**Note:** Check the official install docs at https://docs.anthropic.com/en/docs/claude-code
+before the demo. Install methods may have changed.
 
 ### Which to use for the demo?
 
@@ -81,9 +82,13 @@ MCP config for this option (`.claude/settings.json`):
 
 ### Option B: Docker (more reliable, good for VSCode demo)
 
+**IMPORTANT:** Verify this image exists before relying on it. Run the pull
+command during dry-run. If it fails, use npx instead.
+
 ```bash
 # Pull the image ahead of time:
 docker pull hashicorp/terraform-mcp-server:latest
+# If this fails, the image may not be published — use npx (Option A).
 ```
 
 MCP config for this option (`.claude/settings.json`):
@@ -216,7 +221,8 @@ git clone https://github.com/antonbabenko/terraform-skill.git ~/.claude/skills/t
 cd ~/demo-terraform-full/
 claude   # or open in VSCode
 # Verify: MCP tools show up
-# Install HashiCorp skills: /plugin marketplace add hashicorp/agent-skills
+# Install HashiCorp skills: npx skills add hashicorp/agent-skills
+# Or: claude plugin marketplace add hashicorp/agent-skills
 # Verify: skills list shows up
 ```
 

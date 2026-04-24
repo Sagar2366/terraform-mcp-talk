@@ -9,15 +9,12 @@ Keep this open in a second tab. Copy-paste each prompt when its moment comes.
 **Directory:** `~/demo-terraform-naive` | **Skills:** none | **MCP:** none
 
 ```
-Create a single-file Terraform configuration (main.tf) that:
-
-- Uses the AWS provider in us-east-1
-- Creates a VPC, a public subnet, and an EC2 instance
-- Opens SSH (22) and HTTP (80) from the internet
-- Uses any AMI and instance type you like
-
-Do not split into modules, tests, or CI. Just make it "work".
+I need to deploy a small web application on AWS.
+Set up the networking and compute. Keep it simple.
 ```
+
+That's it. Vague on purpose — this is what real engineers actually type.
+The point: watch what the AI CHOOSES to do when you don't specify security.
 
 ---
 
@@ -45,33 +42,17 @@ List the HashiCorp Agent Skills you have available and summarize each in one lin
 
 ---
 
-## Act 3: Production EC2 with MCP + Skills
+## Act 3: Same Prompt, With MCP + Skills Active
 
 **Directory:** `~/demo-terraform-full` | **Skills:** both active | **MCP:** active
 
 ```
-I want a production-ready Terraform setup for a tiny web EC2 instance.
-
-Requirements:
-
-- Use the AWS provider in us-east-1
-- Create:
-  - a VPC with one public subnet
-  - a security group that allows ONLY HTTPS (443) from the internet
-  - a single t3.micro EC2 instance in that subnet
-- Enforce:
-  - encrypted root volume
-  - required tags on all resources: ManagedBy, Environment, Team
-- Structure as:
-  - main.tf
-  - variables.tf
-  - outputs.tf
-
-Before writing any code, use whatever Terraform tools or skills you have
-to read the AWS provider and the aws_vpc, aws_subnet, aws_security_group,
-and aws_instance docs from the Terraform Registry. Do NOT invent arguments.
-Then generate the configuration.
+I need to deploy a small web application on AWS.
+Set up the networking and compute. Keep it simple.
 ```
+
+EXACT same prompt as Act 1. The point: same input, different output.
+The improvement comes from skills + MCP, not from a better prompt.
 
 ---
 
@@ -89,8 +70,9 @@ for the current configuration:
 
 Use mock_provider "aws" so tests run without AWS credentials.
 Use a single run block with command = "plan" and clear assertions.
-Do not change my existing *.tf files, just output the test file content.
 ```
+
+Claude Code will write the file directly. No manual copy needed.
 
 Then run:
 

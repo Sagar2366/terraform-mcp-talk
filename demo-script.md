@@ -22,11 +22,11 @@
 "Everyone says: 'Just ask AI to write your Terraform.'
 And it works. It spits out HCL that plans and often even applies.
 
-The problem? It also happily:
+The problem? When you don't specify security, the AI fills in the blanks with the laziest defaults:
 
-- opens `0.0.0.0/0` on port 22,
-- creates unencrypted volumes and buckets,
-- and hard-codes everything into one `main.tf` with allow-all IAM.
+- SSH open to the internet because 'you might need it',
+- unencrypted volumes because you didn't say 'encrypt',
+- and everything hardcoded into one `main.tf` because you said 'keep it simple'.
 
 LLMs are trained to be helpful. They want to close the chat loop fast. So they take the shortest path to 'works on my dev account' and hand it to you with a smile.
 
@@ -63,18 +63,16 @@ Say:
 
 ### Step 1.2 — Naive prompt
 
+"This is the kind of prompt a real engineer types at 5pm on a Friday."
+
 Paste:
 
 ```
-Create a single-file Terraform configuration (main.tf) that:
-
-- Uses the AWS provider in us-east-1
-- Creates a VPC, a public subnet, and an EC2 instance
-- Opens SSH (22) and HTTP (80) from the internet
-- Uses any AMI and instance type you like
-
-Do not split into modules, tests, or CI. Just make it "work".
+I need to deploy a small web application on AWS.
+Set up the networking and compute. Keep it simple.
 ```
+
+**[That's it. Vague. No security requirements. No structure demands. Just like real life.]**
 
 Let it run. Then in Terminal 2:
 
@@ -83,17 +81,22 @@ cd ~/demo-terraform-naive
 cat main.tf
 ```
 
-On camera, quickly point at:
+**[Now look at what the AI CHOSE to do on its own:]**
 
-- `0.0.0.0/0` on 22 and 80
-- no encryption on the root volume
-- no tags
-- everything hardcoded
-- single `main.tf`
+On camera, point at the decisions the AI made WITHOUT you asking:
+
+- Did it open SSH (22) to `0.0.0.0/0`? You didn't ask for SSH access — it added it "to be helpful"
+- Did it use HTTP (80) instead of HTTPS (443)? You said "web app" — it assumed unencrypted
+- Is the root volume encrypted? You didn't say "don't encrypt" — but it defaulted to no encryption
+- Are there any tags? Any variables? Or is everything hardcoded?
+- Is it one giant `main.tf`?
+- Any tests? Any CI? Any outputs?
+
+"I did NOT ask for port 22. I did NOT say 'skip encryption.' I said 'deploy a web app, keep it simple.' The AI filled in every gap with the laziest possible default. THAT is the real problem — it's not what you ask for that's dangerous, it's what you DON'T ask for."
 
 Line:
 
-"This will probably plan and apply. It's also a great way to get paged at 3am."
+"The AI is not malicious. It's helpful. And helpful without guardrails means: take the shortest path, skip everything you didn't explicitly mention, and hand it to you with a smile."
 
 **Transition:**
 
@@ -174,13 +177,18 @@ You want something along the lines of "Terraform/OpenTofu best practices, module
 
 ### Step 2.4 — Install HashiCorp Agent Skills (official product skills)
 
-In Claude:
+In Terminal 2 (or in Claude):
 
-```
-/plugin marketplace add hashicorp/agent-skills
+```bash
+# Option A: npx skills (works outside Claude)
+npx skills add hashicorp/agent-skills
+
+# Option B: Claude Code plugin system
+claude plugin marketplace add hashicorp/agent-skills
+claude plugin install terraform-code-generation@hashicorp
 ```
 
-(Or if that's slow, skip the UI and just say you have them installed.)
+(Try Option A first during dry-run. If that's slow, use Option B. If both are slow live, say you have them pre-installed.)
 
 Check:
 
@@ -198,33 +206,16 @@ Don't explain each — just:
 
 ## Act 3 — Same Ask, But Now "Safe Terraform" (10-12 min)
 
-**Goal:** show clear before/after.
+**Goal:** show clear before/after. USE THE SAME VAGUE PROMPT — let tools do the work.
 
 Still in `~/demo-terraform-full` in Claude:
 
 ```
-I want a production-ready Terraform setup for a tiny web EC2 instance.
-
-Requirements:
-
-- Use the AWS provider in us-east-1
-- Create:
-  - a VPC with one public subnet
-  - a security group that allows ONLY HTTPS (443) from the internet
-  - a single t3.micro EC2 instance in that subnet
-- Enforce:
-  - encrypted root volume
-  - required tags on all resources: ManagedBy, Environment, Team
-- Structure as:
-  - main.tf
-  - variables.tf
-  - outputs.tf
-
-Before writing any code, use whatever Terraform tools or skills you have
-to read the AWS provider and the aws_vpc, aws_subnet, aws_security_group,
-and aws_instance docs from the Terraform Registry. Do NOT invent arguments.
-Then generate the configuration.
+I need to deploy a small web application on AWS.
+Set up the networking and compute. Keep it simple.
 ```
+
+**[EXACT same prompt as Act 1. This is critical — the audience must see that the PROMPT didn't change, only the tools behind it.]**
 
 Let it run.
 
@@ -237,19 +228,18 @@ cat variables.tf
 cat outputs.tf
 ```
 
-On camera, quickly compare with naive:
+On camera, compare with the naive output:
 
-- Variables instead of hardcoded region/AMI/type
-- Only 443 from `0.0.0.0/0`
-- Encrypted root volume
-- Tags present
-- Multiple files instead of a giant `main.tf`
+- Did it create separate files this time? (variables.tf, outputs.tf)
+- Did it default to HTTPS instead of HTTP?
+- Did it skip SSH, or at least restrict it to a specific CIDR?
+- Is the root volume encrypted without us asking?
+- Are there tags?
+- Did it use variables instead of hardcoding?
 
-Line:
+"Same prompt. Word for word. I didn't ask for encryption. I didn't ask for tags. I didn't ask for separate files. The SKILLS added those defaults. The MCP server made sure the argument names are correct. The AI is the same — the context around it changed."
 
-"Same model, similar ask. The only difference is: now it's reading live docs through MCP and following Terraform best-practices and HashiCorp style skills."
-
-**Don't over-explain MCP/skills here. The demo itself is the point.**
+**This is the honest demo moment. Same input, different output, because of tools — not because of a better prompt.**
 
 ---
 
@@ -273,18 +263,9 @@ for the current configuration:
 
 Use mock_provider "aws" so tests run without AWS credentials.
 Use a single run block with command = "plan" and clear assertions.
-Do not change my existing *.tf files, just output the test file content.
 ```
 
-Copy the output into files. Terminal 2:
-
-```bash
-mkdir -p tests/mocks
-# paste ec2.tftest.hcl content from Claude into tests/ec2.tftest.hcl
-cat > tests/mocks/aws.tfmock.hcl << 'EOF'
-mock_provider "aws" {}
-EOF
-```
+**[Claude Code will write the file directly to tests/ec2.tftest.hcl. Don't manually copy anything.]**
 
 ### Step 4.2 — Run the tests
 
@@ -352,11 +333,11 @@ Just enough to show "prompts as policy" without staying long.
 
 ## Closing (2-3 min, on camera)
 
-"You've just seen the exact same idea three times:
+"You've just seen:
 
-1. **Naive LLM Terraform** — it 'works' but is unsafe and unreviewable.
-2. **LLM + MCP + skills** — same ask, but now it uses live Terraform docs and best practices, so the shape of the config is much closer to something you'd actually ship.
-3. **LLM + tests** — Terraform's native tests become the contract. The AI has to satisfy your policy encoded as code.
+1. **Naked LLM + vague prompt** — it 'works' but fills every gap with the laziest default. SSH open, no encryption, no tags, no tests.
+2. **Same prompt + MCP + skills** — same two lines, but now the AI has expert knowledge and live docs. It CHOSE encryption, CHOSE proper structure, CHOSE better security defaults — without us asking.
+3. **Tests as the contract** — even with all the guardrails, we don't trust. We verify. `terraform test` catches anything the AI misses.
 
 The stack is simple:
 
