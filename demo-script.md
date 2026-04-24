@@ -999,3 +999,224 @@ Infracost can estimate infrastructure cost before apply.
 Copilot autocompletes lines. This is an agent that reads registry docs, follows
 expert skills, generates full modules, writes tests, and fixes failures. Different
 category entirely.
+
+---
+
+## Prompting for Terraform — Why It's Different and How to Do It Right
+
+This is the theory behind why the demo works. The talk is called "Prompting
+Terraform" — you should be able to explain WHY certain prompts work better,
+not just show it.
+
+### Why Prompts Matter MORE for Infrastructure Than for App Code
+
+Jab tum AI se Python function likhwaate ho aur wo galat likhta hai — what happens?
+Unit test fails. You fix it. No harm done.
+
+Jab tum AI se Terraform likhwaate ho aur wo galat likhta hai — what happens?
+Port 22 open to the internet. Unencrypted database. Public S3 bucket.
+**It deploys to production and creates a security incident.**
+
+App code fails closed (error). Infrastructure fails OPEN (exposure).
+
+That's why prompting for IaC is a different game. A lazy prompt for a Python
+function costs you 10 minutes. A lazy prompt for Terraform can cost you a
+breach.
+
+### The Vague vs Constraint Prompt — The DIFF
+
+This is the core visual of the whole demo. Same intent, two very different prompts:
+
+```
+VAGUE PROMPT (Act 1):
+┌─────────────────────────────────────────────────────────┐
+│ I need to deploy a small web application on AWS.        │
+│ Set up the networking and compute. Keep it simple.      │
+└─────────────────────────────────────────────────────────┘
+                    ↓ AI fills ALL the gaps ↓
+  • Which ports? → 22, 80 (most common, easiest)
+  • Encryption? → No (you didn't ask)
+  • Tags? → No (you didn't ask)
+  • File structure? → One main.tf (simplest)
+  • Variables? → Hardcoded (simplest)
+
+
+CONSTRAINT PROMPT (what good looks like):
+┌─────────────────────────────────────────────────────────┐
+│ Generate ONLY an aws_security_group resource that:      │
+│                                                         │
+│ - Belongs to variable vpc_id                            │
+│ - Allows ingress HTTPS (443) from 0.0.0.0/0            │
+│ - Does NOT allow any other ingress from 0.0.0.0/0      │
+│ - Has a description on every rule                       │
+│ - Has tags Name, ManagedBy, Environment, Team           │
+│                                                         │
+│ If you cannot satisfy one of these constraints,         │
+│ say so explicitly and explain which one.                │
+└─────────────────────────────────────────────────────────┘
+                    ↓ AI has no room to guess ↓
+  • Which ports? → 443 only (you said so)
+  • Other ports? → Blocked (you said "does NOT")
+  • Tags? → Required (you listed them)
+  • Scope? → One resource only (you said "ONLY")
+  • Uncertainty? → Must flag it (you said "say so explicitly")
+```
+
+**The key insight:** The vague prompt isn't wrong. It's incomplete.
+An LLM will ALWAYS fill gaps. The question is: do YOU fill the gaps,
+or does the AI fill them with lazy defaults?
+
+### Five Prompt Techniques for Terraform
+
+These are concrete patterns you can use and teach:
+
+**1. Negative Constraints — "Do NOT"**
+
+LLMs are optimized to be helpful. They ADD things. "Do NOT" is the brake.
+
+```
+Bad:  "Create a security group for HTTPS"
+      → AI might add SSH "for convenience"
+
+Good: "Create a security group that allows HTTPS (443) from 0.0.0.0/0.
+       Do NOT allow any other ingress from 0.0.0.0/0 on any port."
+      → AI cannot add SSH without violating your rule
+```
+
+Hinglish: "LLM ko bolo kya karna hai, AND kya NAHI karna hai.
+Sirf positive instructions doge toh wo extras add karega."
+
+**2. Scope Control — "ONLY" / "Do not touch"**
+
+Without scope, the AI rewrites everything. With scope, it's surgical.
+
+```
+Bad:  "Fix the security group"
+      → AI might refactor your whole main.tf while it's at it
+
+Good: "Fix ONLY the aws_security_group resource in main.tf.
+       Do not modify any other resources or files."
+      → AI knows the boundary
+```
+
+**3. Escalation Clause — "If you cannot, say so"**
+
+This is the underrated one. When an AI can't do something, it usually
+fakes it — generates plausible-looking but wrong code. The escalation
+clause forces it to admit when it's stuck.
+
+```
+"If you cannot satisfy one of these constraints, say so explicitly
+and explain which one."
+```
+
+Ye line add karo har constraint prompt mein. AI ko permission do
+honestly bolne ke liye ki "I can't do this."
+
+**4. Output Format Control**
+
+Tell the AI what FILE STRUCTURE you want. Otherwise it dumps everything
+into one file.
+
+```
+"Generate the following files:
+- main.tf — VPC, subnet, security group, EC2 instance
+- variables.tf — all input variables with type, description, and default
+- outputs.tf — instance public IP, security group ID
+- tests/ec2.tftest.hcl — test assertions for the rules above"
+```
+
+**5. Reference Real State — "for the current configuration"**
+
+When you say "for the current configuration", Claude Code reads your
+existing .tf files before generating. This grounds the output in reality
+instead of starting from scratch.
+
+```
+Bad:  "Write tests for an EC2 instance"
+      → AI invents its own resource names
+
+Good: "Write tests for the current configuration that enforce:
+       1. root volume encrypted
+       2. only HTTPS from 0.0.0.0/0"
+      → AI reads your actual resource names and writes matching assertions
+```
+
+### The Four Layers — Prompts in Context
+
+Prompts are just ONE layer. Here's how they stack:
+
+```
+┌──────────────────────────────────────────────────┐
+│                  LAYER 4: TESTS                   │
+│  terraform test enforces the contract             │
+│  → Catches what ALL other layers miss             │
+│  → "I don't care who wrote it. Pass or fail."     │
+├──────────────────────────────────────────────────┤
+│                  LAYER 3: PROMPTS                 │
+│  Your specific request + constraints              │
+│  → "What I want, what I don't want"              │
+│  → This is YOUR input — changes every time        │
+├──────────────────────────────────────────────────┤
+│                  LAYER 2: SKILLS                  │
+│  Best practices loaded at startup                 │
+│  → "How to write good Terraform in general"       │
+│  → Same for every prompt                          │
+├──────────────────────────────────────────────────┤
+│                  LAYER 1: MCP                     │
+│  Live data from the registry                      │
+│  → "What the correct argument names are right now"│
+│  → Same for every prompt                          │
+└──────────────────────────────────────────────────┘
+```
+
+**Layer 1 (MCP)** = correct data.
+**Layer 2 (Skills)** = expert patterns.
+**Layer 3 (Prompts)** = your specific intent + constraints.
+**Layer 4 (Tests)** = enforcement. The final gate.
+
+Without Layer 1, the AI hallucinates argument names.
+Without Layer 2, the AI writes messy code that "works."
+Without Layer 3, the AI guesses what you want.
+Without Layer 4, you have no proof it's safe.
+
+**The demo shows Layers 1+2 can compensate for a weak Layer 3** (same
+vague prompt, better output). But the BEST result comes from all four.
+
+### Prompt Anti-Patterns for Terraform
+
+Things to AVOID (and why):
+
+```
+❌ "Make it production-ready"
+   → Too vague. AI's definition of "production-ready" ≠ yours.
+   → Instead: list the specific properties that make it production-ready.
+
+❌ "Use best practices"
+   → Which practices? Whose? From when?
+   → Instead: that's what skills are for. Don't put "use best practices"
+     in the prompt — load a skill that defines them.
+
+❌ "Keep it simple" (without constraints)
+   → AI interprets "simple" as "fewest lines of code"
+   → Fewest lines = no variables, no encryption, no tags, no tests
+   → Instead: "Keep the architecture simple (single instance, no ASG)
+     but follow standard security and tagging practices."
+
+❌ Telling the AI to do too much in one prompt
+   → "Create a full VPC with subnets, NAT, ALB, ASG, RDS, S3, CloudFront,
+     Route53, ACM, and WAF"
+   → AI will hallucinate half the arguments.
+   → Instead: build incrementally. One resource type at a time.
+     Or use modules and ask for composition.
+```
+
+### How This Maps to the Demo
+
+| Demo Moment | Prompt Technique Shown |
+|------------|----------------------|
+| Act 1 (naive) | Anti-pattern: vague prompt, no constraints, "keep it simple" |
+| Act 3 (same prompt + tools) | Skills compensating for weak prompt (Layer 2 covers Layer 3) |
+| Act 4 (write tests) | Output format control + reference real state + scope |
+| Act 4 (fix failures) | Scope control ("do not change") + reference error output |
+| Optional (constraint prompt) | Full constraint prompt: negative constraints, scope, escalation |

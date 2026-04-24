@@ -25,7 +25,7 @@ The point: watch what the AI CHOOSES to do when you don't specify security.
 After starting Claude in the full dir:
 
 ```
-List the Terraform-related tools and skills you have access to right now, and briefly describe each one in one line.
+List the Terraform-related tools you have access to right now and describe each in one short line.
 ```
 
 After installing Anton's skill:
