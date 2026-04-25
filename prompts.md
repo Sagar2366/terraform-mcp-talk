@@ -232,8 +232,6 @@ cd ~/demo-terraform-naive && terraform destroy -auto-approve || true
 
 ## Optional — Constraint Prompt (Standalone SG)
 
-If you have time and want to show a strongly constrained prompt:
-
 ```text
 Generate ONLY an aws_security_group resource that:
 
