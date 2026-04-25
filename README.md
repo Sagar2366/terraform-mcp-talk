@@ -4,9 +4,9 @@
 
 ## What this repo contains
 
-- **prompts.md** — copy-paste-ready prompts for every demo act, with security guardrails, setup instructions, and CI/CD generation
+- **prompts.md** — copy-paste-ready prompts for every demo act, with security guardrails
 
-That's it. Everything else — Terraform configs, tests, GitHub Actions workflow, .gitignore — is generated live during the demo from the prompts.
+That's it. Everything else — Terraform configs, tests, .gitignore — is generated live during the demo from the prompts.
 
 ## The three layers
 
@@ -20,31 +20,23 @@ Plus **`terraform test`** as the contract that catches anything the AI misses.
 
 | Act | What happens | Tools active |
 |-----|-------------|--------------|
-| Act 1 | Naive prompt — insecure output, local state | None |
+| Act 1 | Naive prompt — insecure output | None |
 | Act 2 | Install skills + verify MCP tools | Skills + MCP loading |
-| Act 3 | Same prompt + constraints — production-ready, S3 backend | Skills + MCP active |
+| Act 3 | Same prompt + constraints — production-ready output | Skills + MCP active |
 | Act 4 | Write tests, run them, fix failures | Skills + MCP active |
-| Act 5 | Generate CI/CD pipeline, push to GitHub, deploy with approval | Skills + MCP active |
+
+No AWS credentials needed — the core demo uses `terraform plan` + `mock_provider` only.
+
+Real AWS deployment + CI/CD pipeline prompts are included as bonus content in prompts.md.
 
 ## Prerequisites
 
-### AWS
-- Dedicated demo/sandbox AWS account (**NOT production**)
-- IAM user with EC2, VPC, Security Groups, S3, DynamoDB permissions
-- S3 bucket + DynamoDB table for Terraform remote state (see prompts.md for setup commands)
-- AWS credentials set as environment variables
-
-### GitHub Repository
-- `production` environment with required reviewer (Settings > Environments)
-- Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (Settings > Secrets > Actions)
-
-### Local Machine
 - Terraform >= 1.6
 - Node.js >= 18
 - Docker
 - Kiro (Desktop from [kiro.dev](https://kiro.dev/downloads) or CLI)
 
-See **prompts.md** for detailed setup commands and all demo prompts.
+See **prompts.md** for setup commands.
 
 ## Links
 

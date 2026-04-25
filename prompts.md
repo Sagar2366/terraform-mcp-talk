@@ -2,62 +2,20 @@
 
 Keep this open in a second tab. Copy-paste each prompt when its moment comes.
 
-Everything in this repo — Terraform configs, tests, GitHub Actions workflow, .gitignore — is generated LIVE from these prompts using Kiro.
+Everything in this repo — Terraform configs, tests, .gitignore — is generated LIVE from these prompts using Kiro.
 
 ---
 
 ## What You Need Before the Demo
-
-### Local Machine
 
 ```bash
 terraform version            # >= 1.6 for terraform test
 node --version               # >= 18 for npx (skills install)
 docker --version             # For MCP server
 kiro-cli --version           # Or Kiro Desktop from kiro.dev/downloads
-aws sts get-caller-identity  # AWS credentials working
 ```
 
-### AWS Credentials
-
-Set as environment variables — no files to leak on stage:
-
-```bash
-export AWS_ACCESS_KEY_ID="your-key"
-export AWS_SECRET_ACCESS_KEY="your-secret"
-export AWS_DEFAULT_REGION="us-east-1"
-```
-
-Use a dedicated demo/sandbox AWS account. **NOT production.**
-IAM user needs: EC2, VPC, Security Groups, S3, DynamoDB permissions.
-
-### Terraform State Backend (create once before the demo)
-
-```bash
-# Replace YOUR-UNIQUE-BUCKET-NAME with something unique (e.g., demo-tf-state-sagar-2026)
-
-# S3 bucket for remote state
-aws s3 mb s3://YOUR-UNIQUE-BUCKET-NAME --region us-east-1
-aws s3api put-bucket-versioning \
-  --bucket YOUR-UNIQUE-BUCKET-NAME \
-  --versioning-configuration Status=Enabled
-
-# DynamoDB table for state locking
-aws dynamodb create-table \
-  --table-name terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
-```
-
-### GitHub Repository
-
-1. **Secrets** — Settings → Secrets → Actions:
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY`
-2. **Environment** — Settings → Environments → Create `production`:
-   - Add yourself as required reviewer (enables human-in-the-loop approval)
+No AWS credentials needed for the core demo — everything runs with `terraform plan` + `mock_provider`.
 
 ### Demo Directories
 
@@ -98,21 +56,14 @@ Set up the networking and compute. Keep it simple.
 Vague on purpose — this is what real engineers actually type.
 The point: watch what the AI CHOOSES when you don't specify security.
 
-After generation, run:
+After generation:
 
 ```bash
 terraform init
 terraform plan
-terraform apply -auto-approve
 ```
 
-Point out insecure defaults: open SSH, no encryption, hardcoded AMI, no tags, local state.
-
-Then destroy immediately:
-
-```bash
-terraform destroy -auto-approve
-```
+Point out insecure defaults in the plan: open SSH, no encryption, hardcoded AMI, no tags, no remote state.
 
 ---
 
@@ -127,39 +78,29 @@ npx -y skills add antonbabenko/terraform-skill
 npx -y skills add hashicorp/agent-skills
 ```
 
-### Verify MCP tools
+### Verify MCP tools (quick — one prompt, move on)
 
 ```
 List the Terraform-related tools you have access to right now
 and describe each in one short line.
 ```
 
-### Verify Anton's Terraform Skill
+### Verify skills loaded
 
 ```
-Describe what the terraform skill you have loaded is for.
-What best practices does it bring to Terraform code generation?
-```
-
-### Verify HashiCorp Agent Skills
-
-```
-List the HashiCorp Agent Skills you have available and summarize
-each in one line. How do they improve the Terraform code you generate?
+What skills do you have loaded? Summarize each in one line.
 ```
 
 ---
 
-## Act 3: Same Prompt + Constraints + Remote State
+## Act 3: Same Prompt + Constraints
 
 **Directory:** `~/demo-terraform-full/` | **Skills:** both active | **MCP:** active
-
-**IMPORTANT:** Replace `YOUR-UNIQUE-BUCKET-NAME` with your actual S3 bucket name before pasting.
 
 ```
 I need to deploy a small web application on AWS.
 Set up the networking and compute. Keep it simple.
-All files in an infra/ directory.
+All files in an infra/ directory. Local backend — no remote state.
 
 Constraints:
 - No hardcoded credentials, API keys, or secrets anywhere.
@@ -170,10 +111,8 @@ Constraints:
 - EC2 root volume encrypted.
 - Security group: ONLY HTTPS (443) inbound from 0.0.0.0/0. No SSH, HTTP, or other ports.
 - AWS provider default_tags block for common tags.
-- Separate files: main.tf, variables.tf, outputs.tf, backend.tf.
+- Separate files: main.tf, variables.tf, outputs.tf.
 - Data source for AMI lookup — no hardcoded AMI IDs.
-- S3 backend: bucket "YOUR-UNIQUE-BUCKET-NAME", key "demo/terraform.tfstate",
-  region "us-east-1", dynamodb_table "terraform-locks", encrypt true.
 
 If you cannot satisfy any constraint, say so and explain which one.
 ```
@@ -184,14 +123,15 @@ After generation:
 cd infra/
 terraform init
 terraform plan
-terraform apply -auto-approve
 ```
 
-Compare side-by-side with Act 1 output.
+Compare side-by-side with Act 1 output. Same intent, wildly different result.
 
 ---
 
 ## Act 4: Write Tests (Policy-as-Code)
+
+This is the payoff — tests as the contract that catches anything the AI misses.
 
 ```
 Write a Terraform test file at infra/tests/ec2.tftest.hcl that enforces
@@ -243,145 +183,12 @@ real attributes from the current configuration. Do not weaken the rules.
 
 ---
 
-## Act 5: Generate CI/CD Pipeline + Repo Files
-
-### Generate .gitignore
-
-```
-Generate a .gitignore file at the repository root for this Terraform project.
-It should ignore:
-- .terraform/ directories (recursive, all subdirs)
-- .terraform.lock.hcl files (recursive)
-- *.tfstate and *.tfstate.backup files
-- tfplan files
-- .kiro/ directory (local IDE config, not needed in repo)
-
-Nothing else. Keep it minimal.
-```
-
-### Generate GitHub Actions Workflow
-
-```
-Generate a GitHub Actions workflow at .github/workflows/deploy.yml for this
-Terraform project. The workflow validates, tests, deploys, and destroys
-the infrastructure in infra/ with human-in-the-loop approval.
-
-Trigger on: push to main, pull_request to main, workflow_dispatch.
-
-Global environment variables:
-- NODE_VERSION: "22"
-- TF_VERSION: "1.12.0"
-- TF_WORKING_DIR: infra
-- FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
-Jobs (in this exact order with these dependencies):
-
-1. validate-mcp-server (runs on ubuntu-latest):
-   - Checkout code
-   - Pull Docker image: hashicorp/terraform-mcp-server:latest
-   - Send a JSON-RPC initialize request to verify the MCP server responds.
-     Use this exact JSON:
-     {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-test","version":"1.0.0"}}}
-     Pipe it through: timeout 10 docker run -i --rm hashicorp/terraform-mcp-server:latest
-     Grep the response for "terraform-mcp-server". Fail the step if not found.
-
-2. validate-skills (runs on ubuntu-latest):
-   - Checkout code
-   - Setup Node.js with NODE_VERSION
-   - Install Anton's Terraform Skill: npx -y skills add antonbabenko/terraform-skill
-   - Install HashiCorp Agent Skills: npx -y skills add hashicorp/agent-skills
-   - Verify skills installed by searching for SKILL.md:
-     find / -name "SKILL.md" -type f 2>/dev/null || true
-     Print a success message. Do NOT fail if find returns nothing (install location varies).
-
-3. terraform-validate (needs: validate-mcp-server, validate-skills):
-   - Runs on ubuntu-latest, working directory: infra/
-   - AWS credentials from secrets (needed for S3 backend during init):
-     AWS_ACCESS_KEY_ID from secrets, AWS_SECRET_ACCESS_KEY from secrets,
-     AWS_DEFAULT_REGION: us-east-1
-   - Checkout code
-   - Check that .tf files exist in infra/ — if not, fail with a message:
-     "No .tf files found. Generate Terraform from prompts.md, commit to infra/, then push."
-   - Install Terraform by downloading the binary via curl from
-     releases.hashicorp.com — do NOT use hashicorp/setup-terraform action.
-     Use TF_VERSION env var. Download the linux_amd64 zip, unzip to /usr/local/bin/.
-   - Run: terraform fmt -check -diff
-   - Run: terraform init
-   - Run: terraform validate
-   - Run terraform test ONLY if tests/*.tftest.hcl files exist. Skip with a
-     message if no test files are found.
-
-4. terraform-apply (needs: terraform-validate):
-   - Runs on ubuntu-latest, working directory: infra/
-   - environment: production (requires manual approval in GitHub)
-   - AWS credentials from secrets (same as above)
-   - Checkout code
-   - Install Terraform via curl (same method as above)
-   - Run: terraform init
-   - Run: terraform plan -out=tfplan
-   - Run: terraform apply -auto-approve tfplan
-   - Run: terraform output
-
-5. terraform-destroy (needs: terraform-apply):
-   - ONLY runs if terraform-apply succeeded:
-     if: always() && needs.terraform-apply.result == 'success'
-   - Runs on ubuntu-latest, working directory: infra/
-   - environment: production (requires manual approval)
-   - AWS credentials from secrets
-   - Checkout code
-   - Install Terraform via curl (same method as above)
-   - Run: terraform init
-   - Run: terraform destroy -auto-approve
-
-Important:
-- Do NOT use hashicorp/setup-terraform action anywhere — always install via curl.
-- The terraform install step should use working-directory: . (repo root, not infra/).
-- All terraform commands (fmt, init, validate, test, plan, apply, destroy) run
-  in the TF_WORKING_DIR (infra/).
-```
-
-### Push Everything
+## Cleanup
 
 ```bash
-git add .
-git commit -m "feat: add Terraform infra, tests, and CI/CD pipeline
-
-Generated live using Kiro with:
-- Anton Babenko's Terraform Skill
-- HashiCorp Agent Skills
-- Terraform MCP Server"
-git push origin main
-```
-
----
-
-## Cleanup (after demo)
-
-Destroy all real AWS resources created by Terraform:
-
-```bash
-cd ~/demo-terraform-full/infra/
-terraform destroy -auto-approve
-
-cd ~/demo-terraform-naive/
-terraform destroy -auto-approve
-```
-
-Verify in AWS console:
-- EC2 instances terminated
-- Security groups deleted (except default)
-- VPCs deleted (except default)
-- No running costs
-
-### Optional: Remove state backend after all demos are done
-
-```bash
-# Empty and delete S3 bucket
-aws s3 rm s3://YOUR-UNIQUE-BUCKET-NAME --recursive
-aws s3 rb s3://YOUR-UNIQUE-BUCKET-NAME
-
-# Delete DynamoDB table
-aws dynamodb delete-table --table-name terraform-locks --region us-east-1
+# Just remove generated files — no AWS resources to destroy
+rm -rf ~/demo-terraform-naive/*.tf ~/demo-terraform-naive/.terraform
+rm -rf ~/demo-terraform-full/infra/ ~/demo-terraform-full/.terraform
 ```
 
 ---
@@ -411,16 +218,126 @@ Here is a naive single-file Terraform config for VPC + subnet + EC2:
 
 [PASTE ~/demo-terraform-naive/main.tf HERE]
 
-Refactor this into a production-ready layout following the HashiCorp
-Terraform style guide and Anton Babenko's module best practices:
+Refactor this into a production-ready layout:
 
-- main.tf, variables.tf, outputs.tf, backend.tf in an infra/ directory
+- main.tf, variables.tf, outputs.tf in an infra/ directory
 - Proper variable definitions (no hardcoded region/AMI/instance_type)
 - Tags: ManagedBy, Environment, Team everywhere
 - HTTPS-only security group, encrypted root volume
 - No hardcoded credentials, API keys, or secrets
 - Use data source for AMI lookup
-- S3 backend for remote state
 
 Keep behavior equivalent where safe, and explain the main improvements.
+```
+
+---
+
+## Bonus: Real AWS Deployment + CI/CD
+
+**Post-talk content.** Use this if you have extra time or as a repo resource for attendees.
+
+### AWS Prerequisites
+
+```bash
+# Set credentials — env vars only, no files
+export AWS_ACCESS_KEY_ID="your-key"
+export AWS_SECRET_ACCESS_KEY="your-secret"
+export AWS_DEFAULT_REGION="us-east-1"
+aws sts get-caller-identity
+
+# S3 bucket for remote state (native locking in TF >= 1.10, no DynamoDB)
+aws s3 mb s3://YOUR-UNIQUE-BUCKET-NAME --region us-east-1
+aws s3api put-bucket-versioning \
+  --bucket YOUR-UNIQUE-BUCKET-NAME \
+  --versioning-configuration Status=Enabled
+```
+
+GitHub repo setup:
+1. **Secrets** — Settings > Secrets > Actions: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+2. **Environment** — Settings > Environments > Create `production` with required reviewer
+
+### Add S3 Backend to Existing Config
+
+```
+Update the Terraform configuration in infra/ to use an S3 backend:
+- bucket: "YOUR-UNIQUE-BUCKET-NAME"
+- key: "demo/terraform.tfstate"
+- region: "us-east-1"
+- use_lockfile: true
+- encrypt: true
+
+Put the backend config in infra/backend.tf. Do not change any other files.
+```
+
+### Apply to Real AWS
+
+```bash
+cd infra/
+terraform init
+terraform plan
+terraform apply -auto-approve
+```
+
+### Generate .gitignore
+
+```
+Generate a .gitignore for this repo. Ignore:
+- .terraform/ directories (recursive)
+- .terraform.lock.hcl (recursive)
+- *.tfstate and *.tfstate.backup
+- tfplan files
+- .kiro/ directory
+
+Nothing else.
+```
+
+### Generate GitHub Actions Workflow
+
+```
+Generate a GitHub Actions workflow at .github/workflows/deploy.yml.
+Validates, tests, deploys, and destroys infra/ with human-in-the-loop approval.
+
+Trigger on: push to main, pull_request to main, workflow_dispatch.
+
+Global env vars: NODE_VERSION "22", TF_VERSION "1.12.0", TF_WORKING_DIR infra,
+FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 "true".
+
+Jobs:
+
+1. validate-mcp-server: pull hashicorp/terraform-mcp-server:latest, send JSON-RPC
+   initialize request, grep for "terraform-mcp-server" in response, fail if missing.
+
+2. validate-skills: setup Node.js, npx -y skills add antonbabenko/terraform-skill,
+   npx -y skills add hashicorp/agent-skills, search for SKILL.md files.
+
+3. terraform-validate (needs 1+2): working dir infra/, AWS creds from secrets,
+   check .tf files exist, install Terraform via curl (NOT setup-terraform action),
+   terraform fmt -check, init, validate, test (if test files exist).
+
+4. terraform-apply (needs 3): environment production, AWS creds, install TF via curl,
+   init, plan -out=tfplan, apply -auto-approve tfplan, output.
+
+5. terraform-destroy (needs 4, if apply succeeded): environment production, AWS creds,
+   install TF via curl, init, destroy -auto-approve.
+
+Do NOT use hashicorp/setup-terraform — install via curl from releases.hashicorp.com.
+```
+
+### Push + Deploy
+
+```bash
+git add .
+git commit -m "feat: Terraform infra, tests, and CI/CD — generated live with Kiro"
+git push origin main
+```
+
+### Cleanup
+
+```bash
+cd infra/
+terraform destroy -auto-approve
+
+# Optional: remove state bucket
+aws s3 rm s3://YOUR-UNIQUE-BUCKET-NAME --recursive
+aws s3 rb s3://YOUR-UNIQUE-BUCKET-NAME
 ```
