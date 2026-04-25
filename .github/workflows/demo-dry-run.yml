@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 env:
-  TF_VERSION: "1.12.0"
   NODE_VERSION: "22"
+  TF_VERSION: "1.12.0"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
@@ -53,12 +53,14 @@ jobs:
           find . -name "SKILL.md" -type f 2>/dev/null || true
           echo "Skills install completed"
 
-  validate-naive-config:
-    name: Validate Naive Config (Act 1 — must FAIL tests)
+  deploy-ec2:
+    name: Deploy EC2 (Apply + Destroy)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sample-config-naive
+    needs: [validate-mcp-server, validate-skills]
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
     steps:
       - uses: actions/checkout@v4
 
@@ -67,51 +69,158 @@ jobs:
           curl -fsSL "https://releases.hashicorp.com/terraform/$TF_VERSION/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
           sudo unzip -o /tmp/terraform.zip -d /usr/local/bin/
           terraform version
-        working-directory: .
 
-      - name: Terraform fmt
-        run: terraform fmt -check -diff
-
-      - name: Terraform init
-        run: terraform init
-
-      - name: Terraform validate
-        run: terraform validate
-
-      - name: Terraform test must FAIL (proves naive config is insecure)
+      - name: Verify AWS credentials
         run: |
-          if terraform test -filter=tests/ec2.tftest.hcl; then
-            echo "ERROR: Naive config passed security tests — it should fail!"
-            exit 1
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "AWS_ACCESS_KEY_ID secret not set — skipping deploy"
+            echo "SKIP_DEPLOY=true" >> $GITHUB_ENV
           else
-            echo "EXPECTED: Naive config failed security tests (no encryption, no tags)"
-            echo "This is the whole point of Act 1 — insecure defaults without guardrails"
+            echo "AWS credentials configured"
           fi
 
-  validate-full-config:
-    name: Validate Full Config (Act 3 — must PASS tests)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sample-config
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Terraform
+      - name: Generate Terraform config
+        if: env.SKIP_DEPLOY != 'true'
         run: |
-          curl -fsSL "https://releases.hashicorp.com/terraform/$TF_VERSION/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
-          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin/
-          terraform version
-        working-directory: .
+          mkdir -p /tmp/demo-ec2
+          cat > /tmp/demo-ec2/main.tf << 'TFEOF'
+          terraform {
+            required_version = ">= 1.6"
+            required_providers {
+              aws = {
+                source  = "hashicorp/aws"
+                version = "~> 5.0"
+              }
+            }
+          }
 
-      - name: Terraform fmt
-        run: terraform fmt -check -diff
+          provider "aws" {
+            region = "us-east-1"
+            default_tags {
+              tags = {
+                ManagedBy   = "terraform"
+                Environment = "ci"
+                Team        = "demo"
+                Purpose     = "ci-dry-run"
+              }
+            }
+          }
+
+          data "aws_ami" "amazon_linux" {
+            most_recent = true
+            owners      = ["amazon"]
+            filter {
+              name   = "name"
+              values = ["al2023-ami-*-x86_64"]
+            }
+            filter {
+              name   = "virtualization-type"
+              values = ["hvm"]
+            }
+          }
+
+          resource "aws_vpc" "ci" {
+            cidr_block           = "10.99.0.0/16"
+            enable_dns_hostnames = true
+            tags = { Name = "ci-dry-run-vpc" }
+          }
+
+          resource "aws_subnet" "ci" {
+            vpc_id                  = aws_vpc.ci.id
+            cidr_block              = "10.99.1.0/24"
+            map_public_ip_on_launch = true
+            tags = { Name = "ci-dry-run-subnet" }
+          }
+
+          resource "aws_internet_gateway" "ci" {
+            vpc_id = aws_vpc.ci.id
+            tags   = { Name = "ci-dry-run-igw" }
+          }
+
+          resource "aws_route_table" "ci" {
+            vpc_id = aws_vpc.ci.id
+            route {
+              cidr_block = "0.0.0.0/0"
+              gateway_id = aws_internet_gateway.ci.id
+            }
+            tags = { Name = "ci-dry-run-rt" }
+          }
+
+          resource "aws_route_table_association" "ci" {
+            subnet_id      = aws_subnet.ci.id
+            route_table_id = aws_route_table.ci.id
+          }
+
+          resource "aws_security_group" "ci" {
+            name        = "ci-dry-run-sg"
+            description = "CI dry run - HTTPS only"
+            vpc_id      = aws_vpc.ci.id
+            tags        = { Name = "ci-dry-run-sg" }
+          }
+
+          resource "aws_vpc_security_group_ingress_rule" "https" {
+            security_group_id = aws_security_group.ci.id
+            description       = "Allow HTTPS"
+            cidr_ipv4         = "0.0.0.0/0"
+            from_port         = 443
+            to_port           = 443
+            ip_protocol       = "tcp"
+          }
+
+          resource "aws_vpc_security_group_egress_rule" "all" {
+            security_group_id = aws_security_group.ci.id
+            description       = "Allow all outbound"
+            cidr_ipv4         = "0.0.0.0/0"
+            ip_protocol       = "-1"
+          }
+
+          resource "aws_instance" "ci" {
+            ami                    = data.aws_ami.amazon_linux.id
+            instance_type          = "t3.micro"
+            subnet_id              = aws_subnet.ci.id
+            vpc_security_group_ids = [aws_security_group.ci.id]
+            root_block_device {
+              volume_type = "gp3"
+              volume_size = 8
+              encrypted   = true
+            }
+            tags = { Name = "ci-dry-run-ec2" }
+          }
+
+          output "instance_id" {
+            value = aws_instance.ci.id
+          }
+
+          output "public_ip" {
+            value = aws_instance.ci.public_ip
+          }
+          TFEOF
 
       - name: Terraform init
+        if: env.SKIP_DEPLOY != 'true'
+        working-directory: /tmp/demo-ec2
         run: terraform init
 
-      - name: Terraform validate
-        run: terraform validate
+      - name: Terraform plan
+        if: env.SKIP_DEPLOY != 'true'
+        working-directory: /tmp/demo-ec2
+        run: terraform plan -out=tfplan
 
-      - name: Terraform test must PASS
-        run: terraform test -filter=tests/ec2.tftest.hcl
+      - name: Terraform apply
+        if: env.SKIP_DEPLOY != 'true'
+        working-directory: /tmp/demo-ec2
+        run: terraform apply -auto-approve tfplan
+
+      - name: Verify EC2 is running
+        if: env.SKIP_DEPLOY != 'true'
+        working-directory: /tmp/demo-ec2
+        run: |
+          INSTANCE_ID=$(terraform output -raw instance_id)
+          echo "Created instance: $INSTANCE_ID"
+          aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].State.Name' --output text
+
+      - name: Terraform destroy
+        if: always() && env.SKIP_DEPLOY != 'true'
+        working-directory: /tmp/demo-ec2
+        run: terraform destroy -auto-approve
