@@ -271,8 +271,6 @@ Keep behavior equivalent where safe, and explain the main improvements.
 
 ## Optional — Act 5: CI/CD Pipeline (GitHub Actions)
 
-Only do this if you have time and a repo wired up with secrets.
-
 In Kiro:
 
 ```text
