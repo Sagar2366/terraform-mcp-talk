@@ -4,41 +4,31 @@ Run through this the night before or morning of. Takes ~20 min.
 
 ---
 
-## 1. Install Claude Code for VSCode
+## 1. Install Kiro
 
-### Option A: VSCode Extension (recommended for demo)
+### Option A: Kiro Desktop (recommended for demo)
 
-```bash
-# Open VSCode, go to Extensions (Cmd+Shift+X)
-# Search: "Claude Code"
-# Install the Anthropic extension
-# Or from terminal:
-code --install-extension anthropic.claude-code
-```
+Download from https://kiro.dev/downloads
 
 After install:
-- Open VSCode
-- You should see a Claude icon in the left sidebar (or open the Claude panel via Cmd+Shift+P → "Claude: Open")
-- Sign in with your Anthropic account or API key
-- Verify it works: type a message like "Hello" in the Claude panel
+- Open Kiro
+- Sign in with your AWS account
+- Verify it works: type a message like "Hello"
 
-### Option B: CLI (for terminal-based demo)
+### Option B: Kiro CLI (for terminal-based demo)
 
 ```bash
-# Install via npm:
-npm install -g @anthropic-ai/claude-code
+# Check install docs at https://kiro.dev/docs/cli/getting-started
+# Install method may vary — verify before demo
 
 # Verify:
-claude --version
+kiro-cli --version
 ```
-
-**Note:** Check the official install docs at https://docs.anthropic.com/en/docs/claude-code
-before the demo. Install methods may have changed.
 
 ### Which to use for the demo?
 
-- **VSCode extension** — better for showing generated files side by side (editor + Claude panel)
-- **CLI in terminal** — better for "pure terminal" look, easier for audience to follow
+- **Kiro Desktop** — better for showing generated files side by side (editor + chat panel)
+- **Kiro CLI in terminal** — better for "pure terminal" look, easier for audience to follow
 
 Pick one and stick with it. Don't switch mid-demo.
 
@@ -48,50 +38,25 @@ Pick one and stick with it. Don't switch mid-demo.
 
 ```bash
 terraform version        # Need >= 1.6 (ideally 1.9+) for terraform test
-node --version           # Need v18+ for npx
+node --version           # Need v18+ for npx (skills install)
 git --version            # Need for cloning Anton's skill
-docker --version         # Need if using Docker-based MCP server
+docker --version         # Need for Docker-based MCP server
+kiro-cli --version       # Verify Kiro CLI is installed
 ```
 
 ---
 
-## 3. Set Up the Terraform MCP Server
-
-You have two options. Pick one.
-
-### Option A: npx (simpler, good for CLI demo)
-
-```bash
-# Warm the cache so npx doesn't download during demo:
-npx -y terraform-mcp-server --help
-```
-
-MCP config for this option (`.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "terraform": {
-      "command": "npx",
-      "args": ["-y", "terraform-mcp-server"],
-      "env": {}
-    }
-  }
-}
-```
-
-### Option B: Docker (more reliable, good for VSCode demo)
+## 3. Set Up the Terraform MCP Server (Docker)
 
 **IMPORTANT:** Verify this image exists before relying on it. Run the pull
-command during dry-run. If it fails, use npx instead.
+command during dry-run.
 
 ```bash
 # Pull the image ahead of time:
 docker pull hashicorp/terraform-mcp-server:latest
-# If this fails, the image may not be published — use npx (Option A).
 ```
 
-MCP config for this option (`.claude/settings.json`):
+MCP config (`.kiro/settings/mcp.json`):
 
 ```json
 {
@@ -100,7 +65,7 @@ MCP config for this option (`.claude/settings.json`):
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "hashicorp/terraform-mcp-server:latest"
+        "hashicorp/terraform-mcp-server"
       ],
       "env": {}
     }
@@ -108,7 +73,7 @@ MCP config for this option (`.claude/settings.json`):
 }
 ```
 
-If you need to pass environment variables (e.g., for HCP Terraform):
+### If you need HCP Terraform / TFE support:
 
 ```json
 {
@@ -130,14 +95,11 @@ If you need to pass environment variables (e.g., for HCP Terraform):
 }
 ```
 
-### VSCode-specific MCP setup
+### Kiro MCP config location
 
-If using the Claude Code VSCode extension, the MCP config goes in either:
-
-1. **Project-level** (recommended for demo): `<project-dir>/.claude/settings.json`
-2. **User-level**: `~/.claude/settings.json`
-
-VSCode extension reads the same config format. No extra steps.
+- **Project-level** (recommended for demo): `<project-dir>/.kiro/settings/mcp.json`
+- **User-level**: `~/.kiro/settings/mcp.json`
+- **CLI command**: `kiro-cli mcp add --name "terraform" --command "docker" --args "run -i --rm hashicorp/terraform-mcp-server"`
 
 ---
 
@@ -148,15 +110,18 @@ VSCode extension reads the same config format. No extra steps.
 mkdir -p ~/demo-terraform-naive/
 
 # Full dir — with MCP config
-mkdir -p ~/demo-terraform-full/.claude/
+mkdir -p ~/demo-terraform-full/.kiro/settings/
 
-# Write the MCP config (pick npx or docker from above)
-cat > ~/demo-terraform-full/.claude/settings.json << 'EOF'
+# Write the MCP config (Docker method)
+cat > ~/demo-terraform-full/.kiro/settings/mcp.json << 'EOF'
 {
   "mcpServers": {
     "terraform": {
-      "command": "npx",
-      "args": ["-y", "terraform-mcp-server"],
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "hashicorp/terraform-mcp-server"
+      ],
       "env": {}
     }
   }
@@ -174,15 +139,19 @@ You install this live in Act 2, but pre-clone so you have a fallback if GitHub i
 git clone https://github.com/antonbabenko/terraform-skill.git ~/terraform-skill-backup
 ```
 
-During the demo (Act 2):
+During the demo (Act 2) — use npx skills (IDE-agnostic):
 ```bash
-git clone https://github.com/antonbabenko/terraform-skill.git ~/.claude/skills/terraform
+npx skills add antonbabenko/terraform-skill
 ```
 
-If clone is slow live:
+If that's slow live, manually copy:
 ```bash
-cp -r ~/terraform-skill-backup ~/.claude/skills/terraform
+# Verify the correct target directory during dry-run
+cp -r ~/terraform-skill-backup <kiro-skills-directory>/terraform
 ```
+
+**NOTE:** Verify where Kiro expects skill files during dry-run.
+Try `npx skills add` first — it handles the path automatically.
 
 ---
 
@@ -190,18 +159,15 @@ cp -r ~/terraform-skill-backup ~/.claude/skills/terraform
 
 Skills are installed LIVE to show incremental improvement:
 
-| Act   | Skills state                    | How                                     |
-|-------|---------------------------------|-----------------------------------------|
-| Act 1 | NO skills, NO MCP              | `~/demo-terraform-naive/`, no config    |
-| Act 2 | Install Anton's + HashiCorp    | `git clone` + `/plugin marketplace add` |
-| Act 3 | Both skills + MCP active       | Same dir, everything loaded             |
-| Act 4 | Same — now add tests           | `terraform test` on generated code      |
+| Act   | Skills state                    | How                                          |
+|-------|---------------------------------|----------------------------------------------|
+| Act 1 | NO skills, NO MCP              | `~/demo-terraform-naive/`, no config         |
+| Act 2 | Install Anton's + HashiCorp    | `npx skills add` for both                    |
+| Act 3 | Both skills + MCP active       | Same dir, everything loaded                  |
+| Act 4 | Same — now add tests           | `terraform test` on generated code           |
 
-**Before Act 1, make sure no skills exist:**
-
-```bash
-rm -rf ~/.claude/skills 2>/dev/null
-```
+**Before Act 1, make sure no skills are loaded.**
+Verify during dry-run how to remove/disable skills in Kiro.
 
 ---
 
@@ -210,25 +176,24 @@ rm -rf ~/.claude/skills 2>/dev/null
 ### Test Act 1 (naive):
 ```bash
 cd ~/demo-terraform-naive/
-claude   # or open in VSCode
+kiro-cli   # or open in Kiro Desktop
 # Paste the naive prompt from prompts.md
 # Verify: output is basic single-file, insecure
 ```
 
 ### Test Act 2 (install skills):
 ```bash
-git clone https://github.com/antonbabenko/terraform-skill.git ~/.claude/skills/terraform
+npx skills add antonbabenko/terraform-skill
+npx skills add hashicorp/agent-skills
 cd ~/demo-terraform-full/
-claude   # or open in VSCode
-# Verify: MCP tools show up
-# Install HashiCorp skills: npx skills add hashicorp/agent-skills
-# Or: claude plugin marketplace add hashicorp/agent-skills
-# Verify: skills list shows up
+kiro-cli   # or open in Kiro Desktop
+# Verify: MCP tools show up (use /mcp or ask Kiro to list tools)
+# Verify: skills are loaded
 ```
 
-### Test Act 3 (production prompt):
+### Test Act 3 (same vague prompt):
 ```bash
-# Paste the production EC2 prompt from prompts.md
+# Paste the SAME vague prompt from Act 1
 # Verify: output is multi-file, encrypted, tagged, HTTPS-only
 ```
 
@@ -242,51 +207,54 @@ terraform test -filter=tests/ec2.tftest.hcl
 
 **After dry run, reset for demo:**
 ```bash
-rm -rf ~/.claude/skills
+# Remove skills (verify command during dry-run)
+# npx skills remove antonbabenko/terraform-skill
+# npx skills remove hashicorp/agent-skills
 rm -rf ~/demo-terraform-naive/*.tf
 rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/
 ```
 
 ---
 
-## 8. VSCode Layout for Demo (if using extension)
+## 8. Kiro Desktop Layout for Demo
 
 ```
 ┌─────────────────────────────┬────────────────────────┐
 │                             │                        │
-│    Editor pane              │    Claude Code panel    │
-│    (shows generated .tf)    │    (chat + prompts)     │
+│    Editor pane              │    Kiro chat panel      │
+│    (shows generated .tf)    │    (prompts + output)   │
 │                             │                        │
 │                             │                        │
 └─────────────────────────────┴────────────────────────┘
 ```
 
-- Open VSCode with the demo directory: `code ~/demo-terraform-full/`
-- Claude panel on the right
-- Editor on the left — files appear as Claude creates them
+- Open Kiro with the demo directory
+- Chat panel on the right
+- Editor on the left — files appear as Kiro creates them
 - Terminal at the bottom for `terraform init` / `terraform test`
-- Font size: Cmd+= several times (or set `"editor.fontSize": 18` in settings)
+- Font size: increase for audience visibility
 
 ---
 
 ## 9. Fallback Plans
 
 **If MCP server doesn't connect:**
-- Try the other method (npx ↔ Docker)
-- If both fail: explain MCP verbally, focus on skills + terraform test
+- Restart Docker and re-pull: `docker pull hashicorp/terraform-mcp-server:latest`
+- If Docker fails entirely: explain MCP verbally, focus on skills + terraform test
 - The test-driven loop works without MCP
 
+**If Docker image doesn't exist:**
+- Check https://github.com/hashicorp/terraform-mcp-server for updated image name
+- Worst case: explain MCP conceptually, skip live MCP demo
+
 **If skills install fails live:**
-- `cp -r ~/terraform-skill-backup ~/.claude/skills/terraform` (pre-cloned)
+- `cp -r ~/terraform-skill-backup <target-dir>/terraform` (pre-cloned)
 - For HashiCorp: `npx skills add hashicorp/agent-skills`
 - Worst case: skip to Act 3/4, explain skills conceptually
 
 **If terraform test fails on weird attribute paths:**
 - That's actually good for the demo — show the fix loop
 - If it keeps failing: `terraform validate` as simpler alternative
-
-**If Docker isn't available:**
-- Use npx method instead — same MCP server, different runner
 
 ---
 
@@ -297,7 +265,7 @@ rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/
 | 0:00  | Opening | Problem statement — on camera, no terminal             |
 | 2:00  | Act 1   | Naive prompt, show insecure output                     |
 | 8:00  | Act 2   | Install MCP + skills, verify they loaded               |
-| 18:00 | Act 3   | Production EC2 prompt, compare with naive               |
+| 18:00 | Act 3   | Same vague prompt, compare with naive                   |
 | 28:00 | Act 4   | Write tests, run them, fix failures, rerun              |
 | 40:00 | Close   | Three-point recap, links                               |
 
@@ -306,22 +274,16 @@ rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/
 ## 11. Quick Recovery
 
 ```bash
-# Claude Code hangs:
-# Ctrl+C, restart: claude (or reopen VSCode panel)
+# Kiro hangs:
+# Ctrl+C, restart: kiro-cli (or reopen Kiro Desktop)
 
 # terraform test errors on init:
 rm -rf .terraform .terraform.lock.hcl && terraform init
 
-# npx MCP server errors:
-npm cache clean --force && npx -y terraform-mcp-server --help
-
 # Docker MCP server errors:
 docker pull hashicorp/terraform-mcp-server:latest
 
-# Skills not loading:
-ls -la ~/.claude/skills/
-
 # Nuclear reset:
-rm -rf ~/.claude/skills
-rm -rf ~/demo-terraform-naive/* ~/demo-terraform-full/*.tf
+rm -rf ~/demo-terraform-naive/*.tf ~/demo-terraform-full/*.tf
+rm -rf ~/demo-terraform-full/tests/
 ```

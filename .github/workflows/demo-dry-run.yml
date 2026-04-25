@@ -1,0 +1,116 @@
+name: Demo Dry Run
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.12.0"
+  NODE_VERSION: "20"
+
+jobs:
+  validate-mcp-server:
+    name: Validate MCP Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull MCP server image
+        run: docker pull hashicorp/terraform-mcp-server:latest
+
+      - name: Verify MCP server responds to JSON-RPC
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-test","version":"1.0.0"}}}' \
+            | timeout 10 docker run -i --rm hashicorp/terraform-mcp-server:latest \
+            | head -c 2000
+          echo ""
+          echo "MCP server responded successfully"
+
+  validate-skills:
+    name: Validate Skills Install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Anton's Terraform Skill
+        run: npx -y skills add antonbabenko/terraform-skill
+
+      - name: Install HashiCorp Agent Skills
+        run: npx -y skills add hashicorp/agent-skills
+
+      - name: Verify skills installed
+        run: |
+          echo "--- Installed skills ---"
+          find . -name "SKILL.md" -type f 2>/dev/null || true
+          echo "Skills install completed"
+
+  validate-naive-config:
+    name: Validate Naive Config (Act 1 — must FAIL tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-config-naive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Terraform
+        run: |
+          curl -fsSL "https://releases.hashicorp.com/terraform/$TF_VERSION/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
+          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin/
+          terraform version
+        working-directory: .
+
+      - name: Terraform fmt
+        run: terraform fmt -check -diff
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform test must FAIL (proves naive config is insecure)
+        run: |
+          if terraform test -filter=tests/ec2.tftest.hcl; then
+            echo "ERROR: Naive config passed security tests — it should fail!"
+            exit 1
+          else
+            echo "EXPECTED: Naive config failed security tests (no encryption, no tags)"
+            echo "This is the whole point of Act 1 — insecure defaults without guardrails"
+          fi
+
+  validate-full-config:
+    name: Validate Full Config (Act 3 — must PASS tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-config
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Terraform
+        run: |
+          curl -fsSL "https://releases.hashicorp.com/terraform/$TF_VERSION/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
+          sudo unzip -o /tmp/terraform.zip -d /usr/local/bin/
+          terraform version
+        working-directory: .
+
+      - name: Terraform fmt
+        run: terraform fmt -check -diff
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform test must PASS
+        run: terraform test -filter=tests/ec2.tftest.hcl

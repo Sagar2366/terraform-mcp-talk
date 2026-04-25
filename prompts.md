@@ -22,7 +22,7 @@ The point: watch what the AI CHOOSES to do when you don't specify security.
 
 **Directory:** `~/demo-terraform-full` | **Skills:** being installed | **MCP:** active
 
-After starting Claude in the full dir:
+After starting Kiro in the full dir:
 
 ```
 List the Terraform-related tools you have access to right now and describe each in one short line.
@@ -72,7 +72,7 @@ Use mock_provider "aws" so tests run without AWS credentials.
 Use a single run block with command = "plan" and clear assertions.
 ```
 
-Claude Code will write the file directly. No manual copy needed.
+Kiro will write the file directly. No manual copy needed.
 
 Then run:
 

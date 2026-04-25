@@ -7,12 +7,12 @@
 ## Pre-Demo Setup (do before the talk)
 
 - Have two empty dirs ready: `~/demo-terraform-naive` and `~/demo-terraform-full`
-- MCP config only in `~/demo-terraform-full/.claude/settings.json`
-- No skills installed at the very start (`rm -rf ~/.claude/skills`)
+- MCP config only in `~/demo-terraform-full/`.kiro/settings/mcp.json``
+- No skills installed at the very start (verify skill location during dry-run)
 
 **Terminals:**
 
-- Terminal 1: Claude Code (main demo) — full screen, dark theme, big font.
+- Terminal 1: Kiro (main demo) — full screen, dark theme, big font.
 - Terminal 2: Shell + vim/code to show generated files when needed.
 
 ---
@@ -48,13 +48,13 @@ No slides. Just terminals. Let's go."
 
 **Goal:** show "it works but it's scary".
 
-### Step 1.1 — Go to naive dir, start Claude
+### Step 1.1 — Go to naive dir, start Kiro
 
 Terminal 1:
 
 ```bash
 cd ~/demo-terraform-naive
-claude
+kiro-cli
 ```
 
 Say:
@@ -114,7 +114,7 @@ Terminal 2:
 
 ```bash
 cd ~/demo-terraform-full
-cat .claude/settings.json
+cat `.kiro/settings/mcp.json`
 ```
 
 Show:
@@ -123,8 +123,11 @@ Show:
 {
   "mcpServers": {
     "terraform": {
-      "command": "npx",
-      "args": ["-y", "terraform-mcp-server"],
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "hashicorp/terraform-mcp-server"
+      ],
       "env": {}
     }
   }
@@ -133,15 +136,15 @@ Show:
 
 Say briefly:
 
-"This tells Claude to spin up the Terraform MCP server so it can read live registry docs instead of guessing."
+"This tells Kiro to spin up the Terraform MCP server so it can read live registry docs instead of guessing."
 
-### Step 2.2 — Start Claude with no skills and verify MCP tools
+### Step 2.2 — Start Kiro with no skills and verify MCP tools
 
 Terminal 1:
 
 ```bash
 cd ~/demo-terraform-full
-claude
+kiro-cli
 ```
 
 Prompt:
@@ -154,17 +157,26 @@ Confirm some MCP tools appear. Don't dwell.
 
 ### Step 2.3 — Install Anton's Terraform Skill (community best-practices)
 
+**NOTE:** Skill loading in Kiro may differ from Kiro. During dry-run,
+verify: (1) where `npx skills add` installs to, (2) whether Kiro picks up
+skills from that location, (3) or whether you need to use Kiro's custom
+agent config to include the skill.
+
 In Terminal 2:
 
 ```bash
-git clone https://github.com/antonbabenko/terraform-skill.git ~/.claude/skills/terraform
+# Option A: npx skills (IDE-agnostic)
+npx skills add antonbabenko/terraform-skill
+
+# Option B: manual clone (verify the target path during dry-run)
+git clone https://github.com/antonbabenko/terraform-skill.git ~/.kiro/skills/terraform
 ```
 
-Back to Terminal 1, restart Claude:
+Back to Terminal 1, restart Kiro:
 
 ```
 exit
-claude
+kiro-cli
 ```
 
 Quick prompt:
@@ -177,18 +189,14 @@ You want something along the lines of "Terraform/OpenTofu best practices, module
 
 ### Step 2.4 — Install HashiCorp Agent Skills (official product skills)
 
-In Terminal 2 (or in Claude):
+In Terminal 2 (or in Kiro):
 
 ```bash
-# Option A: npx skills (works outside Claude)
+# npx skills (works across IDEs including Kiro)
 npx skills add hashicorp/agent-skills
-
-# Option B: Claude Code plugin system
-claude plugin marketplace add hashicorp/agent-skills
-claude plugin install terraform-code-generation@hashicorp
 ```
 
-(Try Option A first during dry-run. If that's slow, use Option B. If both are slow live, say you have them pre-installed.)
+(Try during dry-run first. If it's slow live, say you have them pre-installed.)
 
 Check:
 
@@ -208,7 +216,7 @@ Don't explain each — just:
 
 **Goal:** show clear before/after. USE THE SAME VAGUE PROMPT — let tools do the work.
 
-Still in `~/demo-terraform-full` in Claude:
+Still in `~/demo-terraform-full` in Kiro:
 
 ```
 I need to deploy a small web application on AWS.
@@ -247,9 +255,9 @@ On camera, compare with the naive output:
 
 **Goal:** show tests catching issues and AI fixing them.
 
-### Step 4.1 — Ask Claude to write a test file
+### Step 4.1 — Ask Kiro to write a test file
 
-In Claude (still in `~/demo-terraform-full`):
+In Kiro (still in `~/demo-terraform-full`):
 
 ```
 Write a Terraform test file at tests/ec2.tftest.hcl that enforces these rules
@@ -265,7 +273,7 @@ Use mock_provider "aws" so tests run without AWS credentials.
 Use a single run block with command = "plan" and clear assertions.
 ```
 
-**[Claude Code will write the file directly to tests/ec2.tftest.hcl. Don't manually copy anything.]**
+**[Kiro will write the file directly to tests/ec2.tftest.hcl. Don't manually copy anything.]**
 
 ### Step 4.2 — Run the tests
 
@@ -282,7 +290,7 @@ If it passes first try, great. If it fails (likely due to attribute paths), even
 
 "Good. The test is stricter than the code. That's what we want."
 
-Grab the error text, then in Claude:
+Grab the error text, then in Kiro:
 
 ```
 terraform test -filter=tests/ec2.tftest.hcl failed with this error:
@@ -312,7 +320,7 @@ When it goes green:
 
 If you have time, quickly show how a good prompt can harden a single resource:
 
-In Claude:
+In Kiro:
 
 ```
 Generate ONLY an aws_security_group resource that:
@@ -406,8 +414,8 @@ Start with the full picture in your head, then we'll break each piece down below
 │  │    (git clone → skills/)   (plugin install)                       │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
-│  During code generation, Claude calls MCP tools:                        │
-│  "I need to look up aws_instance docs before writing..."                │
+│  During code generation, the AI calls MCP tools:                          │
+│  "I need to look up aws_instance docs before writing..."                  │
 │                                   │                                     │
 └───────────────────────────────────┼─────────────────────────────────────┘
                                     │ MCP tool call (JSON-RPC over stdio)
@@ -459,10 +467,10 @@ AI can read from it.
 
 **The real explanation:**
 
-Socho ek situation. Tum Claude se bolo "AWS VPC module use kar ke Terraform likh do."
-Claude kya karega? Apne training data se likhega. Training data kab ka hai? 6 months
+Socho ek situation. Tum Kiro se bolo "AWS VPC module use kar ke Terraform likh do."
+AI kya karega? Apne training data se likhega. Training data kab ka hai? 6 months
 purana. 1 saal purana. Module ka version change ho gaya. Arguments change ho gaye.
-Naye arguments aaye. Claude ko pata hi nahi.
+Naye arguments aaye. AI ko pata hi nahi.
 
 Yahi problem MCP solve karta hai.
 
@@ -472,37 +480,37 @@ MCP AI tools ke liye hai.
 
 ```
 Without MCP:
-  You ask Claude → Claude guesses from training data → Maybe correct, maybe hallucinated
+  You ask the AI → AI guesses from training data → Maybe correct, maybe hallucinated
 
 With MCP:
-  You ask Claude → Claude calls MCP server → MCP reads LIVE docs from registry.terraform.io
-  → Claude gets real argument names, types, defaults → Generates correct code
+  You ask the AI → AI calls MCP server → MCP reads LIVE docs from registry.terraform.io
+  → AI gets real argument names, types, defaults → Generates correct code
 ```
 
 **How it works technically:**
 
-1. You configure an MCP server in `.claude/settings.json`
-2. When Claude Code starts, it connects to that server via stdio (stdin/stdout)
+1. You configure an MCP server in `.kiro/settings/mcp.json`
+2. When Kiro starts, it connects to that server via stdio (stdin/stdout)
 3. The server exposes "tools" — functions the AI can call
-4. Claude decides WHEN to call which tool based on your prompt
-5. The tool returns real data — Claude uses that data to generate code
+4. The AI decides WHEN to call which tool based on your prompt
+5. The tool returns real data — the AI uses that data to generate code
 
 ### MCP Protocol — How the Pipe Works
 
 ```
 ┌──────────────┐          stdio (stdin/stdout)         ┌──────────────────┐
 │              │  ──────── JSON-RPC messages ────────▶  │                  │
-│  Claude Code │                                        │  MCP Server      │
+│  Kiro │                                        │  MCP Server      │
 │  (MCP Client)│  ◀──────── tool results ────────────  │  (terraform-mcp) │
 │              │                                        │                  │
 └──────────────┘                                        └──────────────────┘
 
 Step-by-step during generation:
 
-1. Claude reads your prompt
+1. The AI reads your prompt
    "...deploy a small web app on AWS..."
 
-2. Claude (guided by skills) decides it needs resource docs
+2. The AI (guided by skills) decides it needs resource docs
    → Calls MCP tool: get_provider_details("hashicorp/aws")
 
 3. MCP server receives the call
@@ -511,12 +519,12 @@ Step-by-step during generation:
 4. MCP server returns real documentation
    ← Actual argument names, types, required fields, defaults
 
-5. Claude uses REAL argument names to generate Terraform
+5. The AI uses REAL argument names to generate Terraform
    → No hallucination. No guessing. Real data.
 ```
 
 > The official MCP architecture follows a Host → Client → Server model.
-> Claude Code is the Host, it creates MCP Clients (one per server),
+> Kiro is the Host, it creates MCP Clients (one per server),
 > each Client connects to one MCP Server (like terraform-mcp-server).
 > See: https://modelcontextprotocol.io/docs/concepts/architecture
 
@@ -566,8 +574,8 @@ ek folder hai jisme:
 - Reference materials hain (examples, patterns, anti-patterns)
 - Context hai (what framework, what conventions, what tools to use)
 
-Jab tum skill load karte ho, Claude ke context window mein ye sab inject
-ho jata hai. Ab Claude sirf apne training data se nahi likh raha — wo ek
+Jab tum skill load karte ho, Kiro ke context window mein ye sab inject
+ho jata hai. Ab AI sirf apne training data se nahi likh raha — wo ek
 expert ki guidance follow kar raha hai.
 
 ### How Skills Load — Architecture
@@ -575,33 +583,33 @@ expert ki guidance follow kar raha hai.
 **Verified from GitHub repos (Apr 2026):**
 
 ```
-~/.claude/skills/                        Claude Code context window
-├── terraform/        ──── loaded ────▶  ┌─────────────────────────┐
-│   └── SKILL.md               at        │                         │
-│      (Anton Babenko's        startup   │  System prompt          │
-│       community skill)                 │  + Anton's skill rules  │
-│                                        │  + HashiCorp skill rules│
-│                                        │  + Your prompt          │
-│                                        │                         │
-(HashiCorp Agent Skills:                 │  "When writing TF:      │
- installed via plugin)                   │   - always use modules  │
-                                         │   - encrypt by default  │
-agent-skills/         ──── loaded ────▶  │   - write tests         │
-├── terraform/                 at        │   - follow HC style     │
-│   ├── code-generation/       startup   │   - use default_tags    │
-│   │   └── skills/                      │   - run tflint/tfsec"   │
-│   │       ├── terraform-               │                         │
-│   │       │   style-guide/             └─────────────────────────┘
-│   │       │   └── SKILL.md                       │
-│   │       └── write-run-              Claude uses these rules
-│   │           tests/                  while generating code
-│   │           └── SKILL.md                       │
-│   ├── module-generation/                         ▼
-│   │   └── skills/              ┌─────────────────────────┐
-│   │       └── .../             │  Generated Terraform     │
-│   └── provider-development/    │  that follows ALL        │
-│       └── skills/              │  loaded skill rules      │
-│           └── .../             └─────────────────────────┘
+(Skills directory — verify exact path in Kiro)     Kiro context window
+                                                     ┌─────────────────────────┐
+Anton's skill         ──── loaded ────▶              │                         │
+  └── SKILL.md               at                      │  System prompt          │
+     (community skill)       startup                 │  + Anton's skill rules  │
+                                                     │  + HashiCorp skill rules│
+                                                     │  + Your prompt          │
+HashiCorp Agent Skills:                              │                         │
+  installed via                                      │  "When writing TF:      │
+  npx skills add             loaded                  │   - always use modules  │
+                             at                      │   - encrypt by default  │
+agent-skills/         ──── startup ───▶              │   - write tests         │
+├── terraform/                                       │   - follow HC style     │
+│   ├── code-generation/                             │   - use default_tags    │
+│   │   └── skills/                                  │   - run tflint/tfsec"   │
+│   │       ├── terraform-                           │                         │
+│   │       │   style-guide/                         └─────────────────────────┘
+│   │       │   └── SKILL.md                                   │
+│   │       └── write-run-                          Kiro uses these rules
+│   │           tests/                              while generating code
+│   │           └── SKILL.md                                   │
+│   ├── module-generation/                                     ▼
+│   │   └── skills/                          ┌─────────────────────────┐
+│   │       └── .../                         │  Generated Terraform     │
+│   └── provider-development/                │  that follows ALL        │
+│       └── skills/                          │  loaded skill rules      │
+│           └── .../                         └─────────────────────────┘
 └── packer/
     └── .../
 
@@ -611,7 +619,9 @@ Key insight:
   Like a style guide pinned above your desk — you read it, then write code.
 ```
 
-Structure verified from: `github.com/hashicorp/agent-skills` README
+NOTE: Kiro's skill loading mechanism may differ from Claude Code's
+`~/.claude/skills/` directory. Use `npx skills add` (IDE-agnostic) or
+verify during dry-run where Kiro expects skill files.
 
 **Two types of skills in our demo:**
 
@@ -645,7 +655,7 @@ Hardcoded everything              Variables with types + descriptions
 No cost awareness                 Infracost in CI
 ```
 
-Install: `git clone https://github.com/antonbabenko/terraform-skill.git ~/.claude/skills/terraform`
+Install: `npx skills add antonbabenko/terraform-skill` (or `git clone` — verify path during dry-run)
 
 ### 2. HashiCorp Agent Skills (Official)
 
@@ -666,12 +676,8 @@ ye VENDOR ki official guidance hai. HashiCorp khud bol raha hai
 
 Install (from agent-skills README):
 ```bash
-# Option 1: npx skills
+# IDE-agnostic (works with Kiro, Cursor, Claude Code, etc.)
 npx skills add hashicorp/agent-skills
-
-# Option 2: Claude Code plugin
-claude plugin marketplace add hashicorp/agent-skills
-claude plugin install terraform-code-generation@hashicorp
 ```
 
 **Difference between Anton's skill and HashiCorp's skills:**
@@ -847,7 +853,7 @@ YOUR PROMPT
   "Create an EC2 instance with encrypted volume and HTTPS-only SG"
     │
     ▼
-SKILLS (loaded into Claude's context)
+SKILLS (loaded into the AI's context)
   Anton's: "Use modules, add tests, encrypt by default, run tflint"
   HashiCorp's: "Follow our style guide, use default_tags, structure files this way"
     │
@@ -911,14 +917,14 @@ TERRAFORM TEST (the contract)
               │                 │
          PASS ▼            FAIL ▼
     ┌──────────────┐   ┌──────────────────────────┐
-    │  Ship it     │   │  Back to Claude:          │
+    │  Ship it     │   │  Back to Kiro:            │
     │  (tf apply)  │   │  "Test failed. Fix the    │
     │              │   │   TF, not the test."       │
     └──────────────┘   └────────────┬──────────────┘
                                     │
                                     ▼
                             ┌──────────────┐
-                            │ Claude fixes  │
+                            │ Kiro fixes    │
                             │ → rerun test  │
                             │ → loop until  │
                             │   green       │
@@ -935,47 +941,43 @@ TERRAFORM TEST (the contract)
 Your machine
 │
 ├── ~/demo-terraform-full/              ← project directory
-│   ├── .claude/
-│   │   └── settings.json              ← MCP server config lives HERE
-│   │       {
-│   │         "mcpServers": {
-│   │           "terraform": {
-│   │             "command": "npx",
-│   │             "args": ["-y", "terraform-mcp-server"]
+│   ├── .kiro/
+│   │   └── settings/
+│   │       └── mcp.json               ← MCP server config lives HERE
+│   │           {
+│   │             "mcpServers": {
+│   │               "terraform": {
+│   │                 "command": "docker",
+│   │                 "args": ["run", "-i", "--rm",
+│   │                   "hashicorp/terraform-mcp-server"]
+│   │               }
+│   │             }
 │   │           }
-│   │         }
-│   │       }
 │   │
-│   ├── main.tf                         ← generated by Claude
-│   ├── variables.tf                    ← generated by Claude
-│   ├── outputs.tf                      ← generated by Claude
+│   ├── main.tf                         ← generated by Kiro
+│   ├── variables.tf                    ← generated by Kiro
+│   ├── outputs.tf                      ← generated by Kiro
 │   └── tests/
-│       └── ec2.tftest.hcl             ← generated by Claude
+│       └── ec2.tftest.hcl             ← generated by Kiro
 │
-├── ~/.claude/
-│   └── skills/                         ← ALL skills live HERE
-│       └── terraform/                  ← Anton Babenko's skill
-│           └── SKILL.md                  (git clone)
 │
-│   HashiCorp Agent Skills installed via:
-│   claude plugin marketplace add hashicorp/agent-skills
-│   claude plugin install terraform-code-generation@hashicorp
-│   (or: npx skills add hashicorp/agent-skills)
+│   Skills installed via: npx skills add
+│   (verify exact install location during dry-run)
 │
-└── (npx cache or Docker)
-    └── terraform-mcp-server            ← MCP server binary
-        Starts as child process when Claude Code launches
+└── (Docker)
+    └── terraform-mcp-server            ← MCP server container
+        Starts as child process when Kiro launches
         Connects via stdio (stdin/stdout)
-        Dies when Claude Code exits
+        Dies when Kiro exits
 ```
 
 ---
 
 ## Quick Answers for Audience Questions
 
-**"Can I use this with OpenAI/Gemini instead of Claude?"**
+**"Can I use this with OpenAI/Gemini instead of Kiro?"**
 MCP is an open standard. Any AI that supports MCP can use the Terraform MCP server.
-Skills are currently most mature for Claude Code, but the format is open too.
+Skills work across IDEs — `npx skills add` supports Kiro, Claude Code, Cursor, etc.
 
 **"Does this work with Terraform Cloud / Enterprise?"**
 Yes. The MCP server can connect to HCP Terraform / TFE with a token. It can read
@@ -991,7 +993,7 @@ The specific prompts I showed are demo-simplified — in production you'd have
 more detailed constraint prompts and more tests.
 
 **"What about cost?"**
-Claude API costs apply. For a typical Terraform generation session: ~$0.10-0.30.
+API costs apply. For a typical Terraform generation session: ~$0.10-0.30.
 terraform test with mock providers: $0 (no AWS calls).
 Infracost can estimate infrastructure cost before apply.
 
@@ -1128,7 +1130,7 @@ into one file.
 
 **5. Reference Real State — "for the current configuration"**
 
-When you say "for the current configuration", Claude Code reads your
+When you say "for the current configuration", Kiro reads your
 existing .tf files before generating. This grounds the output in reality
 instead of starting from scratch.
 
