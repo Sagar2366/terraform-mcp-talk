@@ -4,12 +4,9 @@
 
 ## What this repo contains
 
-- **prompts.md** — copy-paste-ready prompts for each demo act, with security guardrails
-- **preflight-checklist.md** — full machine setup: Kiro (Desktop + CLI), Terraform MCP server (Docker), AWS account, skills installation, dry-run steps
+- **prompts.md** — copy-paste-ready prompts for every demo act, with security guardrails, setup instructions, and CI/CD generation
 
-## What this repo does NOT contain
-
-No speaker script. No slides. No Terraform code. Everything is generated live during the demo from the prompts.
+That's it. Everything else — Terraform configs, tests, GitHub Actions workflow, .gitignore — is generated live during the demo from the prompts.
 
 ## The three layers
 
@@ -19,64 +16,35 @@ No speaker script. No slides. No Terraform code. Everything is generated live du
 
 Plus **`terraform test`** as the contract that catches anything the AI misses.
 
-## Quick start (on the demo machine)
+## Demo flow
 
-```bash
-# 1. Install Terraform >= 1.6
-terraform version
+| Act | What happens | Tools active |
+|-----|-------------|--------------|
+| Act 1 | Naive prompt — insecure output, local state | None |
+| Act 2 | Install skills + verify MCP tools | Skills + MCP loading |
+| Act 3 | Same prompt + constraints — production-ready, S3 backend | Skills + MCP active |
+| Act 4 | Write tests, run them, fix failures | Skills + MCP active |
+| Act 5 | Generate CI/CD pipeline, push to GitHub, deploy with approval | Skills + MCP active |
 
-# 2. Set up Kiro
-# Download Kiro Desktop from https://kiro.dev/downloads
-# Or install CLI — check https://kiro.dev/docs/cli/getting-started
+## Prerequisites
 
-# 3. Set up MCP server
-docker pull hashicorp/terraform-mcp-server
+### AWS
+- Dedicated demo/sandbox AWS account (**NOT production**)
+- IAM user with EC2, VPC, Security Groups, S3, DynamoDB permissions
+- S3 bucket + DynamoDB table for Terraform remote state (see prompts.md for setup commands)
+- AWS credentials set as environment variables
 
-# 4. Configure AWS credentials (env vars — no files to leak)
-export AWS_ACCESS_KEY_ID="your-key"
-export AWS_SECRET_ACCESS_KEY="your-secret"
-export AWS_DEFAULT_REGION="us-east-1"
-aws sts get-caller-identity
+### GitHub Repository
+- `production` environment with required reviewer (Settings > Environments)
+- Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (Settings > Secrets > Actions)
 
-# 5. Create demo dirs
-mkdir -p ~/demo-terraform-naive/
-mkdir -p ~/demo-terraform-full/.kiro/settings/
-# Copy MCP config into ~/demo-terraform-full/.kiro/settings/mcp.json
-# See preflight-checklist.md for the full config
+### Local Machine
+- Terraform >= 1.6
+- Node.js >= 18
+- Docker
+- Kiro (Desktop from [kiro.dev](https://kiro.dev/downloads) or CLI)
 
-# 6. Skills are installed LIVE during the demo
-```
-
-## CI/CD
-
-GitHub Actions pipeline — validates generated Terraform, then deploys with human approval:
-
-```
-Validate MCP Server ──┐
-                      ├──→ Terraform Validate ──→ [Approve] ──→ Apply ──→ [Approve] ──→ Destroy
-Validate Skills ──────┘     (fmt/init/validate/test)
-```
-
-| Job | What it does |
-|-----|-------------|
-| **Validate MCP Server** | Pulls Docker image, verifies JSON-RPC response |
-| **Validate Skills** | Installs both skills, verifies SKILL.md files exist |
-| **Terraform Validate** | `fmt -check`, `init`, `validate`, `test` on `infra/` |
-| **Terraform Apply** | Requires manual approval (`production` environment), then applies |
-| **Terraform Destroy** | Requires manual approval, then destroys all resources |
-
-### Setup
-
-1. **AWS secrets** — Go to **Settings → Secrets → Actions** and add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
-2. **Environment** — Go to **Settings → Environments**, create `production`, add yourself as required reviewer
-
-### Workflow
-
-1. Generate Terraform from prompts using Kiro
-2. Commit the generated `.tf` files to `infra/`
-3. Push — CI validates automatically
-4. Review the plan, approve in GitHub to apply
-5. Approve again to destroy after demo
+See **prompts.md** for detailed setup commands and all demo prompts.
 
 ## Links
 
