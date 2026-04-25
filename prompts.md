@@ -13,8 +13,18 @@ I need to deploy a small web application on AWS.
 Set up the networking and compute. Keep it simple.
 ```
 
-That's it. Vague on purpose — this is what real engineers actually type.
+Vague on purpose — this is what real engineers actually type.
 The point: watch what the AI CHOOSES to do when you don't specify security.
+
+After generation, run:
+
+```bash
+terraform init
+terraform plan
+terraform apply -auto-approve
+```
+
+Look at what got deployed. Point out the insecure defaults the AI chose.
 
 ---
 
@@ -49,10 +59,35 @@ List the HashiCorp Agent Skills you have available and summarize each in one lin
 ```
 I need to deploy a small web application on AWS.
 Set up the networking and compute. Keep it simple.
+
+Constraints:
+- Do NOT hardcode any credentials, API keys, access keys, or secrets anywhere.
+- Do NOT use inline security group rules — use aws_vpc_security_group_ingress_rule
+  and aws_vpc_security_group_egress_rule resources.
+- Use variables for region, instance type, and any value that might change.
+- All resources must have tags: Name, ManagedBy=terraform, Environment, Team.
+- The EC2 root volume must be encrypted.
+- The security group must allow ONLY HTTPS (443) inbound from 0.0.0.0/0.
+  Do NOT allow SSH, HTTP, or any other port from 0.0.0.0/0.
+- Use the AWS provider's default_tags block for common tags.
+- Generate separate files: main.tf, variables.tf, outputs.tf.
+- Use data source for AMI lookup instead of hardcoding AMI IDs.
+
+If you cannot satisfy any constraint, say so explicitly and explain which one.
 ```
 
-EXACT same prompt as Act 1. The point: same input, different output.
-The improvement comes from skills + MCP, not from a better prompt.
+EXACT same intent as Act 1 ("deploy a small web app"), but with guardrails.
+The improvement comes from skills + MCP + constraints, not from a better idea.
+
+After generation, run:
+
+```bash
+terraform init
+terraform plan
+terraform apply -auto-approve
+```
+
+Compare side-by-side with Act 1 output.
 
 ---
 
@@ -67,6 +102,8 @@ for the current configuration:
 3. The security group must allow only HTTPS (443) from 0.0.0.0/0
    and no other ingress from 0.0.0.0/0.
 4. All resources must have tags: ManagedBy, Environment, and Team.
+5. No hardcoded AMI IDs — must use a data source.
+6. No hardcoded credentials or secrets in any .tf file.
 
 Use mock_provider "aws" so tests run without AWS credentials.
 Use a single run block with command = "plan" and clear assertions.
@@ -94,6 +131,7 @@ terraform test -filter=tests/ec2.tftest.hcl failed with this error:
 
 Fix ONLY the Terraform configuration so that this test passes.
 Do NOT modify any test files.
+Do NOT introduce any hardcoded credentials, secrets, or API keys.
 Explain briefly what you changed and why.
 ```
 
@@ -114,6 +152,20 @@ from the current configuration. Do not weaken the rules.
 
 ---
 
+## Cleanup (after demo)
+
+Destroy all real AWS resources created during the demo:
+
+```bash
+cd ~/demo-terraform-full
+terraform destroy -auto-approve
+
+cd ~/demo-terraform-naive
+terraform destroy -auto-approve
+```
+
+---
+
 ## Optional: Constraint Prompt
 
 ```
@@ -124,6 +176,7 @@ Generate ONLY an aws_security_group resource that:
 - Does NOT allow any other ingress from 0.0.0.0/0 on any port
 - Has a description on every rule
 - Has tags Name, ManagedBy, Environment, Team
+- Does NOT contain any hardcoded credentials or secrets
 
 If you cannot satisfy one of these constraints, say so explicitly
 and explain which one.
@@ -144,6 +197,8 @@ Refactor this into a production-ready layout:
 - Proper variable definitions (no hardcoded region/AMI/instance_type)
 - Tags: ManagedBy, Environment, Team everywhere
 - HTTPS-only security group, encrypted root volume
+- No hardcoded credentials, API keys, or secrets
+- Use data source for AMI lookup
 
 Keep behavior equivalent where safe, and explain the main improvements.
 ```

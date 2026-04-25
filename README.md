@@ -4,15 +4,14 @@
 
 ## What this repo contains
 
-- **demo-script.md** — talk script, flow (~40-45 min), and personal theory notes at the bottom
-- **prompts.md** — copy-paste-ready prompts for each demo step
-- **preflight-checklist.md** — full machine setup: Kiro (Desktop + CLI), Terraform MCP server (Docker), skills installation, dry-run steps
+- **prompts.md** — copy-paste-ready prompts for each demo act, with security guardrails
+- **preflight-checklist.md** — full machine setup: Kiro (Desktop + CLI), Terraform MCP server (Docker), AWS account, skills installation, dry-run steps
+- **sample-config/** — "golden" reference config (what Act 3 should produce) for CI validation
+- **sample-config-naive/** — intentionally insecure config (what Act 1 produces) — CI proves tests **fail** against it
 
 ## What this repo does NOT contain
 
-No `main.tf`. No `variables.tf`. No `.tftest.hcl`. All code is generated live during the demo.
-
-The `sample-config/` directory contains a "golden" reference config (what Act 3 should produce) used by CI to validate `terraform fmt`, `terraform validate`, and `terraform test`. The `sample-config-naive/` directory contains an intentionally insecure config (what Act 1 produces) — CI proves the tests **fail** against it.
+No speaker script. No slides. All Terraform code is generated live during the demo from the prompts.
 
 ## The three layers
 
@@ -28,20 +27,26 @@ Plus **`terraform test`** as the contract that catches anything the AI misses.
 # 1. Install Terraform >= 1.6
 terraform version
 
-# 2. Set up Kiro (pick one)
+# 2. Set up Kiro
 # Download Kiro Desktop from https://kiro.dev/downloads
 # Or install CLI — check https://kiro.dev/docs/cli/getting-started
 
 # 3. Set up MCP server
 docker pull hashicorp/terraform-mcp-server
 
-# 4. Create demo dirs
+# 4. Configure AWS credentials (env vars — no files to leak)
+export AWS_ACCESS_KEY_ID="your-key"
+export AWS_SECRET_ACCESS_KEY="your-secret"
+export AWS_DEFAULT_REGION="us-east-1"
+aws sts get-caller-identity
+
+# 5. Create demo dirs
 mkdir -p ~/demo-terraform-naive/
 mkdir -p ~/demo-terraform-full/.kiro/settings/
 # Copy MCP config into ~/demo-terraform-full/.kiro/settings/mcp.json
 # See preflight-checklist.md for the full config
 
-# 5. Skills are installed LIVE during the demo
+# 6. Skills are installed LIVE during the demo
 ```
 
 ## CI/CD

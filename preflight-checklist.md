@@ -46,7 +46,36 @@ kiro-cli --version       # Verify Kiro CLI is installed
 
 ---
 
-## 3. Set Up the Terraform MCP Server (Docker)
+## 3. AWS Account Setup
+
+**You will create REAL AWS resources during the demo. Set this up carefully.**
+
+```bash
+# Option A: Environment variables (recommended for demo — no files to leak)
+export AWS_ACCESS_KEY_ID="your-key"
+export AWS_SECRET_ACCESS_KEY="your-secret"
+export AWS_DEFAULT_REGION="us-east-1"
+
+# Option B: AWS CLI profile
+aws configure --profile demo
+export AWS_PROFILE=demo
+
+# Verify access:
+aws sts get-caller-identity
+```
+
+**Security checklist:**
+- [ ] Use a dedicated demo AWS account or sandbox — NOT your production account
+- [ ] Set a billing alert ($10 threshold)
+- [ ] Use an IAM user with only EC2/VPC/SG permissions — not admin
+- [ ] NEVER hardcode keys in `.tf` files — always use env vars or profiles
+- [ ] Have `terraform destroy` ready to run immediately after each Act
+
+**Estimated cost:** ~$0.02 for a t3.micro running 30 min. Destroy promptly.
+
+---
+
+## 4. Set Up the Terraform MCP Server (Docker)
 
 **IMPORTANT:** Verify this image exists before relying on it. Run the pull
 command during dry-run.
@@ -73,28 +102,6 @@ MCP config (`.kiro/settings/mcp.json`):
 }
 ```
 
-### If you need HCP Terraform / TFE support:
-
-```json
-{
-  "mcpServers": {
-    "terraform": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-e", "TFE_TOKEN",
-        "-e", "TFE_ADDRESS",
-        "hashicorp/terraform-mcp-server:latest"
-      ],
-      "env": {
-        "TFE_TOKEN": "your-token-here",
-        "TFE_ADDRESS": "https://app.terraform.io"
-      }
-    }
-  }
-}
-```
-
 ### Kiro MCP config location
 
 - **Project-level** (recommended for demo): `<project-dir>/.kiro/settings/mcp.json`
@@ -103,7 +110,7 @@ MCP config (`.kiro/settings/mcp.json`):
 
 ---
 
-## 4. Create Demo Directories
+## 5. Create Demo Directories
 
 ```bash
 # Naive dir — clean, no config
@@ -112,7 +119,7 @@ mkdir -p ~/demo-terraform-naive/
 # Full dir — with MCP config
 mkdir -p ~/demo-terraform-full/.kiro/settings/
 
-# Write the MCP config (Docker method)
+# Write the MCP config
 cat > ~/demo-terraform-full/.kiro/settings/mcp.json << 'EOF'
 {
   "mcpServers": {
@@ -131,7 +138,7 @@ EOF
 
 ---
 
-## 5. Pre-Clone Anton's Skill (backup)
+## 6. Pre-Clone Anton's Skill (backup)
 
 You install this live in Act 2, but pre-clone so you have a fallback if GitHub is slow:
 
@@ -155,7 +162,7 @@ Try `npx skills add` first — it handles the path automatically.
 
 ---
 
-## 6. Skills Installation Strategy
+## 7. Skills Installation Strategy
 
 Skills are installed LIVE to show incremental improvement:
 
@@ -171,7 +178,7 @@ Verify during dry-run how to remove/disable skills in Kiro.
 
 ---
 
-## 7. Dry Run Each Act
+## 8. Dry Run Each Act
 
 ### Test Act 1 (naive):
 ```bash
@@ -179,6 +186,9 @@ cd ~/demo-terraform-naive/
 kiro-cli   # or open in Kiro Desktop
 # Paste the naive prompt from prompts.md
 # Verify: output is basic single-file, insecure
+terraform init && terraform plan
+# If plan looks right: terraform apply -auto-approve
+# IMMEDIATELY after reviewing: terraform destroy -auto-approve
 ```
 
 ### Test Act 2 (install skills):
@@ -191,10 +201,13 @@ kiro-cli   # or open in Kiro Desktop
 # Verify: skills are loaded
 ```
 
-### Test Act 3 (same vague prompt):
+### Test Act 3 (same vague prompt + constraints):
 ```bash
-# Paste the SAME vague prompt from Act 1
-# Verify: output is multi-file, encrypted, tagged, HTTPS-only
+# Paste the Act 3 prompt from prompts.md
+# Verify: output is multi-file, encrypted, tagged, HTTPS-only, no hardcoded secrets
+terraform init && terraform plan
+# If plan looks right: terraform apply -auto-approve
+# IMMEDIATELY after reviewing: terraform destroy -auto-approve
 ```
 
 ### Test Act 4 (terraform test):
@@ -205,18 +218,24 @@ terraform test -filter=tests/ec2.tftest.hcl
 # Verify: tests run (pass or fail is fine — both are demo-able)
 ```
 
-**After dry run, reset for demo:**
+**After dry run, clean up EVERYTHING:**
 ```bash
+# Destroy any real AWS resources
+cd ~/demo-terraform-naive && terraform destroy -auto-approve 2>/dev/null
+cd ~/demo-terraform-full && terraform destroy -auto-approve 2>/dev/null
+
 # Remove skills (verify command during dry-run)
 # npx skills remove antonbabenko/terraform-skill
 # npx skills remove hashicorp/agent-skills
-rm -rf ~/demo-terraform-naive/*.tf
-rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/
+
+# Clean generated files
+rm -rf ~/demo-terraform-naive/*.tf ~/demo-terraform-naive/.terraform
+rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/ ~/demo-terraform-full/.terraform
 ```
 
 ---
 
-## 8. Kiro Desktop Layout for Demo
+## 9. Kiro Desktop Layout for Demo
 
 ```
 ┌─────────────────────────────┬────────────────────────┐
@@ -231,12 +250,12 @@ rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/
 - Open Kiro with the demo directory
 - Chat panel on the right
 - Editor on the left — files appear as Kiro creates them
-- Terminal at the bottom for `terraform init` / `terraform test`
+- Terminal at the bottom for `terraform init` / `terraform apply` / `terraform test`
 - Font size: increase for audience visibility
 
 ---
 
-## 9. Fallback Plans
+## 10. Fallback Plans
 
 **If MCP server doesn't connect:**
 - Restart Docker and re-pull: `docker pull hashicorp/terraform-mcp-server:latest`
@@ -256,22 +275,27 @@ rm -rf ~/demo-terraform-full/*.tf ~/demo-terraform-full/tests/
 - That's actually good for the demo — show the fix loop
 - If it keeps failing: `terraform validate` as simpler alternative
 
+**If AWS credentials don't work:**
+- Verify: `aws sts get-caller-identity`
+- Fall back to `terraform plan` only (no apply) — still shows the code differences
+- `terraform test` with `mock_provider` works without any AWS credentials
+
 ---
 
-## 10. Time Checkpoints
+## 11. Time Checkpoints
 
 | Time  | Act     | What's happening                                       |
 |-------|---------|-------------------------------------------------------|
 | 0:00  | Opening | Problem statement — on camera, no terminal             |
-| 2:00  | Act 1   | Naive prompt, show insecure output                     |
+| 2:00  | Act 1   | Naive prompt, show insecure output, apply + review     |
 | 8:00  | Act 2   | Install MCP + skills, verify they loaded               |
-| 18:00 | Act 3   | Same vague prompt, compare with naive                   |
-| 28:00 | Act 4   | Write tests, run them, fix failures, rerun              |
-| 40:00 | Close   | Three-point recap, links                               |
+| 18:00 | Act 3   | Same intent + constraints, apply + compare with naive  |
+| 28:00 | Act 4   | Write tests, run them, fix failures, rerun             |
+| 40:00 | Close   | Three-point recap, destroy all resources, links        |
 
 ---
 
-## 11. Quick Recovery
+## 12. Quick Recovery
 
 ```bash
 # Kiro hangs:
@@ -283,7 +307,30 @@ rm -rf .terraform .terraform.lock.hcl && terraform init
 # Docker MCP server errors:
 docker pull hashicorp/terraform-mcp-server:latest
 
+# AWS auth errors:
+aws sts get-caller-identity
+# If it fails, re-export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+
 # Nuclear reset:
+cd ~/demo-terraform-naive && terraform destroy -auto-approve 2>/dev/null
+cd ~/demo-terraform-full && terraform destroy -auto-approve 2>/dev/null
 rm -rf ~/demo-terraform-naive/*.tf ~/demo-terraform-full/*.tf
 rm -rf ~/demo-terraform-full/tests/
 ```
+
+---
+
+## 13. Post-Demo Checklist
+
+**DO NOT FORGET — destroy all AWS resources after the demo:**
+
+```bash
+cd ~/demo-terraform-naive && terraform destroy -auto-approve
+cd ~/demo-terraform-full && terraform destroy -auto-approve
+```
+
+Verify in AWS console that no resources remain:
+- EC2 instances terminated
+- Security groups deleted (except default)
+- VPCs deleted (except default)
+- No running costs
