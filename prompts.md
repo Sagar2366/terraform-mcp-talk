@@ -78,16 +78,6 @@ terraform init
 terraform plan
 ```
 
-On screen, point out likely issues:
-
-- 0.0.0.0/0 on SSH/HTTP,
-- no encryption,
-- no tags,
-- hardcoded AMI,
-- single `main.tf`, local state.
-
-You don't need to apply in the live demo.
-
 ---
 
 ## Act 2 — Install Skills + Verify MCP
@@ -119,16 +109,12 @@ Then:
 What skills do you have loaded? Summarize each in one line.
 ```
 
-Keep this section short — just prove they're loaded, then move on.
-
 ---
 
 ## Act 3 — Same Prompt + Constraints (MCP + Skills)
 
 **Dir:** `~/demo-terraform-full/`
 **Tools:** MCP + Anton's skill + HashiCorp Agent Skills
-
-Same opening line as Act 1 — the constraints do the work.
 
 Paste into Kiro:
 
@@ -167,16 +153,6 @@ cat outputs.tf
 terraform init
 terraform plan
 ```
-
-On screen, compare to Act 1:
-
-- No SSH from 0.0.0.0/0 — only 443 open.
-- Encrypted root volume.
-- Tags present.
-- Multiple files, variables instead of hard-coded values.
-- Data source for AMI.
-
-Same intent, very different result.
 
 ---
 
@@ -220,8 +196,6 @@ terraform init
 terraform test -filter=tests/ec2.tftest.hcl
 ```
 
-If tests fail due to attribute paths, that's good demo material.
-
 In Kiro, paste:
 
 ```text
@@ -239,9 +213,6 @@ Update the file, then rerun:
 ```bash
 terraform test -filter=tests/ec2.tftest.hcl
 ```
-
-Now you can say: "The AI had to satisfy the tests, not the other way around."
-
 ---
 
 ## Cleanup
@@ -251,8 +222,6 @@ Now you can say: "The AI had to satisfy the tests, not the other way around."
 rm -rf ~/demo-terraform-naive/*.tf ~/demo-terraform-naive/.terraform
 rm -rf ~/demo-terraform-full/infra/ ~/demo-terraform-full/.terraform
 ```
-
-If you applied anything for real:
 
 ```bash
 cd ~/demo-terraform-full/infra && terraform destroy -auto-approve || true
@@ -338,5 +307,3 @@ Requirements:
 
 - Keep the workflow minimal and readable.
 ```
-
-Then briefly show the generated YAML; you don't need to run it live.
