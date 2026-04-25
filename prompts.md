@@ -159,32 +159,23 @@ each in one line. How do they improve the Terraform code you generate?
 ```
 I need to deploy a small web application on AWS.
 Set up the networking and compute. Keep it simple.
-
-Put all generated Terraform files in an infra/ directory.
+All files in an infra/ directory.
 
 Constraints:
-- Do NOT hardcode any credentials, API keys, access keys, or secrets anywhere.
-- Do NOT use inline security group rules — use aws_vpc_security_group_ingress_rule
+- No hardcoded credentials, API keys, or secrets anywhere.
+- No inline security group rules — use aws_vpc_security_group_ingress_rule
   and aws_vpc_security_group_egress_rule resources.
-- Use variables for region, instance type, and any value that might change.
-- All resources must have tags: Name, ManagedBy=terraform, Environment, Team.
-- The EC2 root volume must be encrypted.
-- The security group must allow ONLY HTTPS (443) inbound from 0.0.0.0/0.
-  Do NOT allow SSH, HTTP, or any other port from 0.0.0.0/0.
-- Use the AWS provider's default_tags block for common tags.
-- Generate separate files: main.tf, variables.tf, outputs.tf, backend.tf.
-- Use data source for AMI lookup instead of hardcoding AMI IDs.
-- Use S3 backend for remote state:
-  - bucket: "YOUR-UNIQUE-BUCKET-NAME"
-  - key: "demo/terraform.tfstate"
-  - region: "us-east-1"
-  - dynamodb_table: "terraform-locks"
-  - encrypt: true
+- Variables for region, instance type, and anything that might change.
+- All resources tagged: Name, ManagedBy=terraform, Environment, Team.
+- EC2 root volume encrypted.
+- Security group: ONLY HTTPS (443) inbound from 0.0.0.0/0. No SSH, HTTP, or other ports.
+- AWS provider default_tags block for common tags.
+- Separate files: main.tf, variables.tf, outputs.tf, backend.tf.
+- Data source for AMI lookup — no hardcoded AMI IDs.
+- S3 backend: bucket "YOUR-UNIQUE-BUCKET-NAME", key "demo/terraform.tfstate",
+  region "us-east-1", dynamodb_table "terraform-locks", encrypt true.
 
-Follow the HashiCorp Terraform style guide and Anton Babenko's
-module best practices from the skills you have loaded.
-
-If you cannot satisfy any constraint, say so explicitly and explain which one.
+If you cannot satisfy any constraint, say so and explain which one.
 ```
 
 After generation:
