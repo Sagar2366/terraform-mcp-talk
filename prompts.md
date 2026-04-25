@@ -1,8 +1,4 @@
-# Demo Prompts — Copy-Paste Ready
-
-Keep this open in a second tab. Copy-paste each prompt when its moment comes.
-
-Everything in this repo — Terraform configs, tests, `.gitignore` — is generated LIVE from these prompts using Kiro.
+# Demo Prompts 
 
 ---
 
