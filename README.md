@@ -49,22 +49,34 @@ mkdir -p ~/demo-terraform-full/.kiro/settings/
 
 ## CI/CD
 
-GitHub Actions runs on every push to `main`:
+GitHub Actions pipeline — validates generated Terraform, then deploys with human approval:
 
-| Job | What it checks |
-|-----|----------------|
-| **Validate MCP Server** | Pulls Docker image, sends JSON-RPC initialize, verifies response |
-| **Validate Skills** | `npx skills add` for both Anton's and HashiCorp's skills |
-| **Deploy EC2** | After MCP + skills pass: `terraform apply` creates a real EC2 on AWS, verifies it's running, then `terraform destroy` cleans up |
+```
+Validate MCP Server ──┐
+                      ├──→ Terraform Validate ──→ [Approve] ──→ Apply ──→ [Approve] ──→ Destroy
+Validate Skills ──────┘     (fmt/init/validate/test)
+```
 
-### Setting up AWS credentials for CI
+| Job | What it does |
+|-----|-------------|
+| **Validate MCP Server** | Pulls Docker image, verifies JSON-RPC response |
+| **Validate Skills** | Installs both skills, verifies SKILL.md files exist |
+| **Terraform Validate** | `fmt -check`, `init`, `validate`, `test` on `infra/` |
+| **Terraform Apply** | Requires manual approval (`production` environment), then applies |
+| **Terraform Destroy** | Requires manual approval, then destroys all resources |
 
-Go to **Settings → Secrets and variables → Actions** and add:
+### Setup
 
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
+1. **AWS secrets** — Go to **Settings → Secrets → Actions** and add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+2. **Environment** — Go to **Settings → Environments**, create `production`, add yourself as required reviewer
 
-If secrets aren't set, the deploy job skips gracefully.
+### Workflow
+
+1. Generate Terraform from prompts using Kiro
+2. Commit the generated `.tf` files to `infra/`
+3. Push — CI validates automatically
+4. Review the plan, approve in GitHub to apply
+5. Approve again to destroy after demo
 
 ## Links
 
